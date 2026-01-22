@@ -19,11 +19,12 @@ from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, create_model
 from starlette.responses import JSONResponse
 
 from config.schema import GraphitiConfig, ServerConfig
 from models.response_types import (
+    EntityTypesResponse,
     EpisodeSearchResponse,
     ErrorResponse,
     FactSearchResponse,
@@ -215,16 +216,41 @@ class GraphitiService:
             if self.config.graphiti.entity_types:
                 custom_types = {}
                 for entity_type in self.config.graphiti.entity_types:
-                    # Create a dynamic Pydantic model for each entity type
-                    # Note: Don't use 'name' as it's a protected Pydantic attribute
-                    entity_model = type(
+                    # Build field definitions if entity type has fields
+                    field_definitions: dict[str, Any] = {}
+                    if entity_type.fields:
+                        type_mapping = {
+                            'str': str,
+                            'int': int,
+                            'float': float,
+                            'bool': bool,
+                        }
+                        for field_config in entity_type.fields:
+                            python_type = type_mapping.get(field_config.type, str)
+                            if field_config.required:
+                                field_definitions[field_config.name] = (
+                                    python_type,
+                                    Field(..., description=field_config.description),
+                                )
+                            else:
+                                field_definitions[field_config.name] = (
+                                    python_type | None,
+                                    Field(default=None, description=field_config.description),
+                                )
+
+                    # Create dynamic Pydantic model with optional fields
+                    entity_model = create_model(
                         entity_type.name,
-                        (BaseModel,),
-                        {
-                            '__doc__': entity_type.description,
-                        },
+                        __doc__=entity_type.description,
+                        **field_definitions,
                     )
                     custom_types[entity_type.name] = entity_model
+
+                    if field_definitions:
+                        logger.info(
+                            f'Entity type "{entity_type.name}" with fields: '
+                            f'{list(field_definitions.keys())}'
+                        )
 
             # Store entity types for later use
             self.entity_types = custom_types
@@ -771,6 +797,52 @@ async def get_status() -> StatusResponse:
             status='error',
             message=f'Graphiti MCP server is running but database connection failed: {error_msg}',
         )
+
+
+@mcp.tool()
+async def get_entity_types() -> EntityTypesResponse | ErrorResponse:
+    """Get all configured entity types with their fields.
+
+    Returns the list of entity types that are used for knowledge extraction.
+    Each entity type has a name, description (used as LLM prompt), and optional
+    structured fields for attribute extraction.
+
+    Use this to understand what types of entities and attributes will be
+    extracted when adding memories to the graph.
+    """
+    global graphiti_service
+
+    if graphiti_service is None:
+        return ErrorResponse(error='Graphiti service not initialized')
+
+    try:
+        entity_types_list = []
+
+        if graphiti_service.config.graphiti.entity_types:
+            for et in graphiti_service.config.graphiti.entity_types:
+                fields_list = []
+                if et.fields:
+                    for f in et.fields:
+                        fields_list.append({
+                            'name': f.name,
+                            'type': f.type,
+                            'required': f.required,
+                            'description': f.description,
+                        })
+                entity_types_list.append({
+                    'name': et.name,
+                    'description': et.description,
+                    'fields': fields_list,
+                })
+
+        return EntityTypesResponse(
+            message=f'Found {len(entity_types_list)} configured entity types',
+            entity_types=entity_types_list,
+        )
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error getting entity types: {error_msg}')
+        return ErrorResponse(error=f'Error getting entity types: {error_msg}')
 
 
 @mcp.custom_route('/health', methods=['GET'])
