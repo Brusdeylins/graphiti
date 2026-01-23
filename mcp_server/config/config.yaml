@@ -105,22 +105,249 @@ graphiti:
   group_id: ${GRAPHITI_GROUP_ID:main}
   episode_id_prefix: ${EPISODE_ID_PREFIX:}
   user_id: ${USER_ID:mcp_user}
+  # Entity types based on Schema.org, IEEE 830, and Dublin Core standards
+  # Fields are optional structured attributes extracted by the LLM
   entity_types:
-    - name: "Preference"
-      description: "User preferences, choices, opinions, or selections (PRIORITIZE over most other types except User/Assistant)"
-    - name: "Requirement"
-      description: "Specific needs, features, or functionality that must be fulfilled"
-    - name: "Procedure"
-      description: "Standard operating procedures and sequential instructions"
-    - name: "Location"
-      description: "Physical or virtual places where activities occur"
-    - name: "Event"
-      description: "Time-bound activities, occurrences, or experiences"
+    # === Core Personal/Organizational Entities (Schema.org) ===
+    - name: "Person"
+      description: "A human individual - user, contact, author, participant, or any named person"
+      fields:
+        - name: "email"
+          type: "str"
+          required: false
+          description: "Email address"
+        - name: "phone"
+          type: "str"
+          required: false
+          description: "Phone number"
+        - name: "role"
+          type: "str"
+          required: false
+          description: "Job title, function, or relationship role"
+        - name: "affiliation"
+          type: "str"
+          required: false
+          description: "Organization or group the person belongs to"
+
     - name: "Organization"
-      description: "Companies, institutions, groups, or formal entities"
+      description: "Company, institution, team, group, or any formal entity"
+      fields:
+        - name: "org_type"
+          type: "str"
+          required: false
+          description: "Type: company, nonprofit, government, team, department"
+        - name: "industry"
+          type: "str"
+          required: false
+          description: "Industry sector or domain"
+        - name: "website"
+          type: "str"
+          required: false
+          description: "Website URL"
+        - name: "location"
+          type: "str"
+          required: false
+          description: "Headquarters or primary location"
+
+    # === Spatial/Temporal Entities (Schema.org) ===
+    - name: "Location"
+      description: "Physical place, virtual location, network address, or geographic area"
+      fields:
+        - name: "address"
+          type: "str"
+          required: false
+          description: "Street address or postal address"
+        - name: "city"
+          type: "str"
+          required: false
+          description: "City or locality name"
+        - name: "country"
+          type: "str"
+          required: false
+          description: "Country name or code"
+        - name: "coordinates"
+          type: "str"
+          required: false
+          description: "GPS coordinates (lat,lon) if known"
+        - name: "ip_address"
+          type: "str"
+          required: false
+          description: "IP address or hostname for virtual locations"
+        - name: "location_type"
+          type: "str"
+          required: false
+          description: "Type: physical, virtual, network, geographic"
+
+    - name: "Event"
+      description: "Time-bound occurrence, activity, meeting, or experience"
+      fields:
+        - name: "start_date"
+          type: "str"
+          required: false
+          description: "Start date/time (ISO 8601 format)"
+        - name: "end_date"
+          type: "str"
+          required: false
+          description: "End date/time (ISO 8601 format)"
+        - name: "status"
+          type: "str"
+          required: false
+          description: "Status: scheduled, in_progress, completed, cancelled"
+        - name: "event_type"
+          type: "str"
+          required: false
+          description: "Type: meeting, conference, deadline, milestone, incident"
+        - name: "recurrence"
+          type: "str"
+          required: false
+          description: "Recurrence pattern if applicable (daily, weekly, etc.)"
+
+    # === User Preference/Behavior Entities ===
+    - name: "Preference"
+      description: "User choice, opinion, setting, or selection - PRIORITIZE for personal preferences"
+      fields:
+        - name: "category"
+          type: "str"
+          required: false
+          description: "Category: UI, workflow, communication, technical, personal"
+        - name: "value"
+          type: "str"
+          required: false
+          description: "The preferred value or choice"
+        - name: "strength"
+          type: "str"
+          required: false
+          description: "Preference strength: strong, moderate, weak"
+
+    # === Requirements Management Entities (IEEE 830 / ISO 29148) ===
+    - name: "Requirement"
+      description: "Functional or non-functional requirement, feature request, or specification"
+      fields:
+        - name: "req_type"
+          type: "str"
+          required: false
+          description: "Type: functional, non_functional, constraint, interface"
+        - name: "priority"
+          type: "str"
+          required: false
+          description: "Priority: must_have, should_have, could_have, wont_have (MoSCoW)"
+        - name: "status"
+          type: "str"
+          required: false
+          description: "Status: proposed, approved, implemented, verified, deferred"
+        - name: "acceptance_criteria"
+          type: "str"
+          required: false
+          description: "Conditions for requirement satisfaction"
+        - name: "source"
+          type: "str"
+          required: false
+          description: "Origin: stakeholder, regulation, technical, business"
+        - name: "version"
+          type: "str"
+          required: false
+          description: "Requirement version number"
+
+    # === Document/Content Entities (Dublin Core) ===
     - name: "Document"
-      description: "Information content in various forms (books, articles, reports, etc.)"
+      description: "Information resource: file, article, report, book, specification, or any content"
+      fields:
+        - name: "title"
+          type: "str"
+          required: false
+          description: "Document title"
+        - name: "creator"
+          type: "str"
+          required: false
+          description: "Author or creator name"
+        - name: "date"
+          type: "str"
+          required: false
+          description: "Creation or publication date"
+        - name: "format"
+          type: "str"
+          required: false
+          description: "Format: pdf, markdown, html, docx, text"
+        - name: "identifier"
+          type: "str"
+          required: false
+          description: "Unique identifier: URL, DOI, ISBN, file path"
+        - name: "language"
+          type: "str"
+          required: false
+          description: "Content language (ISO 639-1 code)"
+        - name: "doc_type"
+          type: "str"
+          required: false
+          description: "Type: specification, manual, report, article, contract"
+
+    # === Operational Entities ===
+    - name: "Procedure"
+      description: "Step-by-step process, workflow, standard operating procedure, or instruction set"
+      fields:
+        - name: "steps"
+          type: "str"
+          required: false
+          description: "Numbered steps or stages"
+        - name: "trigger"
+          type: "str"
+          required: false
+          description: "What initiates this procedure"
+        - name: "outcome"
+          type: "str"
+          required: false
+          description: "Expected result or output"
+        - name: "frequency"
+          type: "str"
+          required: false
+          description: "How often: once, daily, weekly, on_demand"
+
+    # === Technical Entities ===
+    - name: "Technology"
+      description: "Software, tool, framework, language, API, or technical component"
+      fields:
+        - name: "tech_type"
+          type: "str"
+          required: false
+          description: "Type: language, framework, database, service, tool"
+        - name: "version"
+          type: "str"
+          required: false
+          description: "Version number or release"
+        - name: "license"
+          type: "str"
+          required: false
+          description: "License type: MIT, Apache, proprietary, etc."
+        - name: "url"
+          type: "str"
+          required: false
+          description: "Documentation or repository URL"
+
+    # === Fallback Entities (use sparingly) ===
     - name: "Topic"
-      description: "Subject of conversation, interest, or knowledge domain (use as last resort)"
+      description: "Subject area, knowledge domain, or theme - use when no specific type fits"
+      fields:
+        - name: "domain"
+          type: "str"
+          required: false
+          description: "Knowledge domain or field"
+        - name: "keywords"
+          type: "str"
+          required: false
+          description: "Related keywords (comma-separated)"
+
     - name: "Object"
-      description: "Physical items, tools, devices, or possessions (use as last resort)"
+      description: "Physical item, device, possession, or tangible thing - use as last resort"
+      fields:
+        - name: "object_type"
+          type: "str"
+          required: false
+          description: "Category: device, tool, furniture, vehicle, etc."
+        - name: "brand"
+          type: "str"
+          required: false
+          description: "Manufacturer or brand name"
+        - name: "model"
+          type: "str"
+          required: false
+          description: "Model number or name"
