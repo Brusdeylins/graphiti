@@ -997,6 +997,34 @@ async def delete_entity_type(request) -> JSONResponse:
         return JSONResponse({'error': str(e)}, status_code=500)
 
 
+@mcp.custom_route('/entity-types/reset', methods=['POST'])
+async def reset_entity_types(request) -> JSONResponse:
+    """Reset entity types to defaults from config.yaml.
+
+    Deletes all entity types from Redis and re-seeds from config.
+    """
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=503)
+
+    try:
+        count = await entity_type_service.reset_to_defaults()
+        logger.info(f'Reset entity types to {count} defaults from config')
+        return JSONResponse({
+            'message': f'Entity types reset to {count} defaults from config',
+            'count': count,
+        })
+
+    except RuntimeError as e:
+        logger.error(f'Error resetting entity types: {str(e)}')
+        return JSONResponse({'error': str(e)}, status_code=400)
+
+    except Exception as e:
+        logger.error(f'Error resetting entity types: {str(e)}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
 async def initialize_server() -> ServerConfig:
     """Parse CLI arguments and initialize the Graphiti server configuration."""
     global config, graphiti_service, queue_service, entity_type_service, graphiti_client, semaphore

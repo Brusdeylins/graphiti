@@ -343,6 +343,37 @@ class EntityTypeService:
 
         return custom_types if custom_types else None
 
+    async def reset_to_defaults(self) -> int:
+        """Reset entity types to config defaults.
+
+        Deletes all entity types from Redis and re-seeds from config.
+
+        Returns:
+            Number of entity types seeded from config
+
+        Raises:
+            RuntimeError: If service not initialized or no config available
+        """
+        if not self._redis:
+            raise RuntimeError('EntityTypeService not initialized')
+
+        if not self._config or not self._config.graphiti.entity_types:
+            raise RuntimeError('No entity types configured in config.yaml')
+
+        # Delete all existing entity types
+        await self._redis.delete(ENTITY_TYPES_KEY)
+        logger.info('Deleted all entity types from Redis')
+
+        # Re-seed from config (force all, not just new ones)
+        config_types = self._config.graphiti.entity_types
+        for config_type in config_types:
+            entity_type = EntityTypeData.from_config(config_type)
+            await self._save(entity_type)
+
+        count = len(config_types)
+        logger.info(f'Reset entity types to {count} defaults from config')
+        return count
+
     async def close(self) -> None:
         """Close Redis connection."""
         if self._redis:
