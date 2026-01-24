@@ -261,6 +261,10 @@ class EntityTypeService:
         if fields is not None:
             entity_type.fields = fields
 
+        # Mark config-sourced entities as modified
+        if entity_type.source == 'config':
+            entity_type.source = 'config_modified'
+
         entity_type.modified_at = datetime.now(timezone.utc).isoformat()
 
         await self._save(entity_type)
