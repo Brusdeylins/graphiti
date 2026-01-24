@@ -580,10 +580,10 @@ graphiti:
           type: "str"
           required: false
           description: "Status: hypothesis, accepted, disputed, deprecated, superseded"
-        - name: "summary"
+        - name: "abstract"
           type: "str"
           required: false
-          description: "Brief summary of the concept"
+          description: "Brief abstract of the concept"
 
     - name: "Fact"
       description: "Asserted statement or claim from a source - verifiable information from books or research. Edges: →Document (source), →Concept (supports, contradicts), →Fact (derived_from, contradicts), →Person (stated_by), →Topic (about)."

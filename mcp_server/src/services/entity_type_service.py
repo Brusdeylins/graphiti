@@ -15,6 +15,12 @@ logger = logging.getLogger(__name__)
 # Redis key for storing entity types
 ENTITY_TYPES_KEY = 'graphiti:entity_types'
 
+# Protected field names that conflict with Graphiti's internal EntityNode attributes
+PROTECTED_FIELD_NAMES = frozenset({
+    'name', 'summary', 'uuid', 'created_at', 'group_id',
+    'labels', 'attributes', 'name_embedding', 'summary_embedding',
+})
+
 
 class EntityTypeData:
     """Data class for entity type stored in Redis."""
@@ -89,6 +95,22 @@ class EntityTypeService:
         """Initialize the entity type service."""
         self._redis: redis.Redis | None = None
         self._config: GraphitiConfig | None = None
+
+    def _validate_fields(self, fields: list[dict[str, Any]] | None) -> None:
+        """Validate field names don't conflict with protected attributes.
+
+        Raises:
+            ValueError: If any field name is protected
+        """
+        if not fields:
+            return
+        for field in fields:
+            field_name = field.get('name', '')
+            if field_name.lower() in PROTECTED_FIELD_NAMES:
+                raise ValueError(
+                    f'Field name "{field_name}" is reserved by Graphiti. '
+                    f'Protected names: {", ".join(sorted(PROTECTED_FIELD_NAMES))}'
+                )
 
     async def initialize(
         self,
@@ -217,11 +239,13 @@ class EntityTypeService:
             The created entity type
 
         Raises:
-            ValueError: If entity type with this name already exists
+            ValueError: If entity type with this name already exists or field names are protected
         """
         existing = await self.get_by_name(name)
         if existing:
             raise ValueError(f'Entity type "{name}" already exists')
+
+        self._validate_fields(fields)
 
         entity_type = EntityTypeData(
             name=name,
@@ -250,11 +274,14 @@ class EntityTypeService:
             The updated entity type
 
         Raises:
-            ValueError: If entity type not found
+            ValueError: If entity type not found or field names are protected
         """
         entity_type = await self.get_by_name(name)
         if not entity_type:
             raise ValueError(f'Entity type "{name}" not found')
+
+        if fields is not None:
+            self._validate_fields(fields)
 
         if description is not None:
             entity_type.description = description
