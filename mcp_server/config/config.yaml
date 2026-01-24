@@ -106,12 +106,39 @@ graphiti:
   episode_id_prefix: ${EPISODE_ID_PREFIX:}
   user_id: ${USER_ID:mcp_user}
   # Entity types based on Schema.org, IEEE 830, and Dublin Core standards
-  # Fields are optional structured attributes extracted by the LLM
+  #
+  # DESIGN PRINCIPLES:
+  # - Fields = Intrinsic scalar values (dates, numbers, enums, identifiers, contact info)
+  # - Edges = Relationships to other entities (extracted automatically by LLM)
+  #   Example: Person→Organization is an EDGE, not a field "affiliation"
+  #
+  # DO NOT add fields for relationships - the LLM creates edges automatically:
+  #   ✗ Person.affiliation (wrong - should be edge Person→Organization)
+  #   ✗ Organization.location (wrong - should be edge Organization→Location)
+  #   ✓ Person.birth_date (correct - scalar value)
+  #   ✓ Person.email (correct - contact identifier)
+  #
   entity_types:
     # === Core Personal/Organizational Entities (Schema.org) ===
     - name: "Person"
-      description: "A human individual - user, contact, author, participant, or any named person"
+      description: "A human individual - user, contact, author, participant, or any named person. Edges: →Organization (employer, member_of), →Person (spouse, parent, child, sibling, friend, colleague), →Location (residence, birthplace, workplace), →Event (attends, organizes)."
       fields:
+        - name: "title"
+          type: "str"
+          required: false
+          description: "Academic/professional title: Dr., Prof., Dipl.-Ing., etc."
+        - name: "first_name"
+          type: "str"
+          required: false
+          description: "First/given name (Rufname)"
+        - name: "middle_names"
+          type: "str"
+          required: false
+          description: "Middle names (comma-separated if multiple)"
+        - name: "last_name"
+          type: "str"
+          required: false
+          description: "Last/family name"
         - name: "email"
           type: "str"
           required: false
@@ -119,44 +146,60 @@ graphiti:
         - name: "phone"
           type: "str"
           required: false
-          description: "Phone number"
-        - name: "role"
+          description: "Phone number (landline)"
+        - name: "mobile"
           type: "str"
           required: false
-          description: "Job title, function, or relationship role"
-        - name: "affiliation"
+          description: "Mobile phone number"
+        - name: "birth_date"
           type: "str"
           required: false
-          description: "Organization or group the person belongs to"
+          description: "Date of birth (ISO 8601: YYYY-MM-DD)"
+        - name: "gender"
+          type: "str"
+          required: false
+          description: "Gender: male, female, other, unknown"
+        - name: "nationality"
+          type: "str"
+          required: false
+          description: "Nationality (ISO 3166-1 country code)"
+        - name: "job_title"
+          type: "str"
+          required: false
+          description: "Current job title or profession"
 
     - name: "Organization"
-      description: "Company, institution, team, group, or any formal entity"
+      description: "Company, institution, team, group, or any formal entity. Edges: →Location (headquarters, branch, office), →Person (founder, ceo, employee, member), →Organization (parent_company, subsidiary, partner), →NetworkEndpoint (website, api)."
       fields:
-        - name: "org_type"
+        - name: "type"
           type: "str"
           required: false
-          description: "Type: company, nonprofit, government, team, department"
+          description: "Type: company, nonprofit, government, team, department, university"
         - name: "industry"
           type: "str"
           required: false
-          description: "Industry sector or domain"
-        - name: "website"
+          description: "Industry sector"
+        - name: "founded_date"
           type: "str"
           required: false
-          description: "Website URL"
-        - name: "location"
+          description: "Founding date (ISO 8601)"
+        - name: "tax_id"
           type: "str"
           required: false
-          description: "Headquarters or primary location"
+          description: "Tax ID, VAT number, or registration number"
 
     # === Spatial/Temporal Entities (Schema.org) ===
     - name: "Location"
-      description: "Physical place, virtual location, network address, or geographic area"
+      description: "Physical place or geographic area. Virtual/network locations use NetworkEndpoint instead. Edges: →Location (part_of, near - e.g., city→country)."
       fields:
         - name: "address"
           type: "str"
           required: false
-          description: "Street address or postal address"
+          description: "Full street address"
+        - name: "postal_code"
+          type: "str"
+          required: false
+          description: "Postal/ZIP code"
         - name: "city"
           type: "str"
           required: false
@@ -164,52 +207,48 @@ graphiti:
         - name: "country"
           type: "str"
           required: false
-          description: "Country name or code"
+          description: "Country (ISO 3166-1 code)"
         - name: "coordinates"
           type: "str"
           required: false
-          description: "GPS coordinates (lat,lon) if known"
-        - name: "ip_address"
+          description: "GPS coordinates (lat,lon)"
+        - name: "type"
           type: "str"
           required: false
-          description: "IP address or hostname for virtual locations"
-        - name: "location_type"
-          type: "str"
-          required: false
-          description: "Type: physical, virtual, network, geographic"
+          description: "Type: address, city, region, country, building, room, area"
 
     - name: "Event"
-      description: "Time-bound occurrence, activity, meeting, or experience"
+      description: "Time-bound occurrence, activity, or meeting. Edges: →Person (organizer, participant, speaker), →Location (venue), →Organization (host, sponsor), →NetworkEndpoint (meeting_link, registration_url), →Event (part_of, follows)."
       fields:
         - name: "start_date"
           type: "str"
           required: false
-          description: "Start date/time (ISO 8601 format)"
+          description: "Start date/time (ISO 8601)"
         - name: "end_date"
           type: "str"
           required: false
-          description: "End date/time (ISO 8601 format)"
+          description: "End date/time (ISO 8601)"
         - name: "status"
           type: "str"
           required: false
           description: "Status: scheduled, in_progress, completed, cancelled"
-        - name: "event_type"
+        - name: "type"
           type: "str"
           required: false
-          description: "Type: meeting, conference, deadline, milestone, incident"
+          description: "Type: meeting, conference, deadline, milestone, incident, birthday, holiday"
         - name: "recurrence"
           type: "str"
           required: false
-          description: "Recurrence pattern if applicable (daily, weekly, etc.)"
+          description: "Recurrence: once, daily, weekly, monthly, yearly"
 
     # === User Preference/Behavior Entities ===
     - name: "Preference"
-      description: "User choice, opinion, setting, or selection - PRIORITIZE for personal preferences"
+      description: "User choice, opinion, setting, or selection - PRIORITIZE for personal preferences. Edges: →Person (held_by), →Topic (about), →Technology (prefers)."
       fields:
         - name: "category"
           type: "str"
           required: false
-          description: "Category: UI, workflow, communication, technical, personal"
+          description: "Category: ui, workflow, communication, technical, food, lifestyle"
         - name: "value"
           type: "str"
           required: false
@@ -217,73 +256,65 @@ graphiti:
         - name: "strength"
           type: "str"
           required: false
-          description: "Preference strength: strong, moderate, weak"
+          description: "Strength: must, prefer, like, dislike, avoid, never"
 
     # === Requirements Management Entities (IEEE 830 / ISO 29148) ===
     - name: "Requirement"
-      description: "Functional or non-functional requirement, feature request, or specification"
+      description: "Functional or non-functional requirement, feature request, or specification. Edges: →Person (requested_by, assigned_to), →Organization (stakeholder), →Technology (requires, implements), →Requirement (depends_on, conflicts_with)."
       fields:
-        - name: "req_type"
+        - name: "type"
           type: "str"
           required: false
-          description: "Type: functional, non_functional, constraint, interface"
+          description: "Type: functional, performance, security, usability, constraint"
         - name: "priority"
           type: "str"
           required: false
-          description: "Priority: must_have, should_have, could_have, wont_have (MoSCoW)"
+          description: "MoSCoW: must_have, should_have, could_have, wont_have"
         - name: "status"
           type: "str"
           required: false
-          description: "Status: proposed, approved, implemented, verified, deferred"
+          description: "Status: draft, proposed, approved, implemented, verified, rejected"
         - name: "acceptance_criteria"
           type: "str"
           required: false
-          description: "Conditions for requirement satisfaction"
-        - name: "source"
-          type: "str"
-          required: false
-          description: "Origin: stakeholder, regulation, technical, business"
+          description: "Testable conditions for satisfaction"
         - name: "version"
           type: "str"
           required: false
-          description: "Requirement version number"
+          description: "Version number (semver)"
 
     # === Document/Content Entities (Dublin Core) ===
     - name: "Document"
-      description: "Information resource: file, article, report, book, specification, or any content"
+      description: "Information resource: file, article, report, book. Edges: →Person (author, editor, reviewer), →Organization (publisher), →Topic (about), →Document (references, version_of), →NetworkEndpoint (url, download_link)."
       fields:
         - name: "title"
           type: "str"
           required: false
           description: "Document title"
-        - name: "creator"
+        - name: "publication_date"
           type: "str"
           required: false
-          description: "Author or creator name"
-        - name: "date"
-          type: "str"
-          required: false
-          description: "Creation or publication date"
+          description: "Publication date (ISO 8601)"
         - name: "format"
           type: "str"
           required: false
-          description: "Format: pdf, markdown, html, docx, text"
+          description: "Format: pdf, markdown, html, docx, txt, epub"
         - name: "identifier"
           type: "str"
           required: false
-          description: "Unique identifier: URL, DOI, ISBN, file path"
+          description: "Unique ID: DOI, ISBN, file path"
         - name: "language"
           type: "str"
           required: false
-          description: "Content language (ISO 639-1 code)"
-        - name: "doc_type"
+          description: "Content language (ISO 639-1: en, de, fr)"
+        - name: "type"
           type: "str"
           required: false
-          description: "Type: specification, manual, report, article, contract"
+          description: "Type: specification, manual, report, article, contract, email"
 
     # === Operational Entities ===
     - name: "Procedure"
-      description: "Step-by-step process, workflow, standard operating procedure, or instruction set"
+      description: "Step-by-step process, workflow, or instruction set. Edges: →Person (responsible, executor), →Technology (uses), →Document (documented_in), →Procedure (sub_procedure, follows)."
       fields:
         - name: "steps"
           type: "str"
@@ -300,49 +331,74 @@ graphiti:
         - name: "frequency"
           type: "str"
           required: false
-          description: "How often: once, daily, weekly, on_demand"
+          description: "Frequency: once, daily, weekly, on_demand"
 
     # === Technical Entities ===
     - name: "Technology"
-      description: "Software, tool, framework, language, API, or technical component"
+      description: "Software, tool, framework, language, or technical component. Edges: →Technology (depends_on, alternative_to, built_with), →Organization (developed_by, maintained_by), →NetworkEndpoint (repository, documentation, homepage), →Domain (belongs_to)."
       fields:
-        - name: "tech_type"
+        - name: "type"
           type: "str"
           required: false
-          description: "Type: language, framework, database, service, tool"
+          description: "Type: language, framework, database, service, tool, library"
         - name: "version"
           type: "str"
           required: false
-          description: "Version number or release"
+          description: "Version number (semver)"
         - name: "license"
           type: "str"
           required: false
-          description: "License type: MIT, Apache, proprietary, etc."
-        - name: "url"
-          type: "str"
-          required: false
-          description: "Documentation or repository URL"
+          description: "License: MIT, Apache-2.0, GPL-3.0, proprietary"
 
-    # === Fallback Entities (use sparingly) ===
-    - name: "Topic"
-      description: "Subject area, knowledge domain, or theme - use when no specific type fits"
+    - name: "NetworkEndpoint"
+      description: "Network address, URL, API endpoint, or connection URI. A URL IS a NetworkEndpoint. Edges: →Organization (owned_by, hosted_by), →Technology (serves, runs), →Location (hosted_in - data center location)."
       fields:
-        - name: "domain"
+        - name: "protocol"
           type: "str"
           required: false
-          description: "Knowledge domain or field"
+          description: "Protocol: http, https, ssh, redis, postgresql, mongodb, mqtt, grpc"
+        - name: "host"
+          type: "str"
+          required: false
+          description: "Hostname, IP address, or domain"
+        - name: "port"
+          type: "str"
+          required: false
+          description: "Port number"
+        - name: "path"
+          type: "str"
+          required: false
+          description: "URL path or resource path"
+        - name: "type"
+          type: "str"
+          required: false
+          description: "Type: api, database, website, service, ssh, vpn, websocket"
+
+    # === Knowledge Organization Entities ===
+    - name: "Domain"
+      description: "Knowledge domain, field of expertise, or subject area (e.g., 'Software Engineering', 'Medicine', 'Cooking'). Edges: →Domain (parent_domain, related_to)."
+      fields:
+        - name: "type"
+          type: "str"
+          required: false
+          description: "Type: academic, professional, hobby, industry, science"
+
+    - name: "Topic"
+      description: "Specific subject or theme within a domain (e.g., 'Python', 'Heart Surgery', 'Italian Cuisine'). Edges: →Domain (belongs_to), →Topic (related_to, prerequisite_of)."
+      fields:
         - name: "keywords"
           type: "str"
           required: false
           description: "Related keywords (comma-separated)"
 
-    - name: "Object"
-      description: "Physical item, device, possession, or tangible thing - use as last resort"
+    # === Physical Items (use sparingly) ===
+    - name: "Item"
+      description: "Physical object, device, or tangible thing (e.g., 'MacBook Pro', 'Toyota Corolla', 'Office Chair'). Edges: →Person (owned_by, used_by), →Organization (owned_by, manufactured_by), →Location (located_at)."
       fields:
-        - name: "object_type"
+        - name: "type"
           type: "str"
           required: false
-          description: "Category: device, tool, furniture, vehicle, etc."
+          description: "Category: device, tool, furniture, vehicle, appliance"
         - name: "brand"
           type: "str"
           required: false
@@ -351,3 +407,7 @@ graphiti:
           type: "str"
           required: false
           description: "Model number or name"
+        - name: "serial_number"
+          type: "str"
+          required: false
+          description: "Serial number or unique identifier"
