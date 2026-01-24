@@ -554,7 +554,7 @@ graphiti:
           description: "Related keywords (comma-separated)"
 
     - name: "Term"
-      description: "Domain-specific term, concept, or glossary entry - Fachbegriff. Edges: →Domain (belongs_to), →Term (synonym_of, see_also), →Document (defined_in)."
+      description: "Domain-specific term, concept, or glossary entry - Fachbegriff. Edges: →Domain (belongs_to), →Term (synonym_of, see_also), →Document (defined_in), →Concept (used_in)."
       fields:
         - name: "definition"
           type: "str"
@@ -568,6 +568,42 @@ graphiti:
           type: "str"
           required: false
           description: "Alternative names (comma-separated)"
+
+    - name: "Concept"
+      description: "Abstract idea, theory, model, or principle - from books, papers, or established knowledge. Edges: →Domain (belongs_to), →Topic (part_of), →Concept (builds_on, contradicts, extends), →Person (developed_by), →Document (described_in), →Term (uses), →Fact (supported_by)."
+      fields:
+        - name: "type"
+          type: "str"
+          required: false
+          description: "Type: theory, model, principle, framework, paradigm, hypothesis, law"
+        - name: "status"
+          type: "str"
+          required: false
+          description: "Status: hypothesis, accepted, disputed, deprecated, superseded"
+        - name: "summary"
+          type: "str"
+          required: false
+          description: "Brief summary of the concept"
+
+    - name: "Fact"
+      description: "Asserted statement or claim from a source - verifiable information from books or research. Edges: →Document (source), →Concept (supports, contradicts), →Fact (derived_from, contradicts), →Person (stated_by), →Topic (about)."
+      fields:
+        - name: "confidence"
+          type: "str"
+          required: false
+          description: "Confidence: verified, likely, disputed, disproven"
+        - name: "evidence_type"
+          type: "str"
+          required: false
+          description: "Evidence: empirical, theoretical, anecdotal, statistical, citation"
+        - name: "value"
+          type: "str"
+          required: false
+          description: "The factual value if quantifiable (e.g., '299792458 m/s')"
+        - name: "source_page"
+          type: "str"
+          required: false
+          description: "Page number or location in source document"
 
     # === Physical Items (use sparingly) ===
     - name: "Item"

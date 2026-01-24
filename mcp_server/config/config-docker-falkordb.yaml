@@ -134,7 +134,11 @@ graphiti:
     - name: "Topic"
       description: "Specific subject or theme within a domain. Edges: →Domain (belongs_to), →Topic (related_to, prerequisite_of), →Project (about), →Term (has_term)."
     - name: "Term"
-      description: "Domain-specific term, concept, or glossary entry - Fachbegriff. Edges: →Domain (belongs_to), →Term (synonym_of, see_also), →Document (defined_in)."
+      description: "Domain-specific term, concept, or glossary entry - Fachbegriff. Edges: →Domain (belongs_to), →Term (synonym_of, see_also), →Document (defined_in), →Concept (used_in)."
+    - name: "Concept"
+      description: "Abstract idea, theory, model, or principle - from books, papers, or established knowledge. Edges: →Domain (belongs_to), →Topic (part_of), →Concept (builds_on, contradicts, extends), →Person (developed_by), →Document (described_in), →Term (uses), →Fact (supported_by)."
+    - name: "Fact"
+      description: "Asserted statement or claim from a source - verifiable information from books or research. Edges: →Document (source), →Concept (supports, contradicts), →Fact (derived_from, contradicts), →Person (stated_by), →Topic (about)."
     # === Physical Items ===
     - name: "Item"
       description: "Physical object, device, or tangible thing. Edges: →Person (owned_by, used_by), →Organization (owned_by, manufactured_by), →Location (located_at)."
