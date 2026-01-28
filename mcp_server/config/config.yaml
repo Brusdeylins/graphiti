@@ -27,7 +27,6 @@ llm:
                                      # For Ollama/local LLMs: set to same as main model
   is_reasoning: ${LLM_IS_REASONING:}  # Optional: Set true for reasoning models
                                        # Auto-detected for gpt-5/o1/o3 if not set
-  small_is_reasoning: ${LLM_SMALL_IS_REASONING:}  # Optional: Set true if small model is a reasoning model
   max_tokens: 4096
   
   providers:
@@ -134,11 +133,11 @@ graphiti:
         - name: "start_date"
           type: "str"
           required: false
-          description: "Project start (ISO 8601)"
+          description: "Project start (YYYY-MM-DD)"
         - name: "end_date"
           type: "str"
           required: false
-          description: "Project end/deadline (ISO 8601)"
+          description: "Project end/deadline (YYYY-MM-DD)"
 
     # === Core Personal/Organizational Entities (Schema.org) ===
     - name: "Person"
@@ -179,7 +178,7 @@ graphiti:
         - name: "birth_date"
           type: "str"
           required: false
-          description: "Date of birth (ISO 8601: YYYY-MM-DD)"
+          description: "Date of birth (YYYY-MM-DD)"
         - name: "nationality"
           type: "str"
           required: false
@@ -203,7 +202,7 @@ graphiti:
         - name: "founded_date"
           type: "str"
           required: false
-          description: "Founding date (ISO 8601)"
+          description: "Founding date (YYYY-MM-DD)"
         - name: "tax_id"
           type: "str"
           required: false
@@ -213,6 +212,10 @@ graphiti:
     - name: "Location"
       description: "Physical place or geographic area. Virtual/network locations use NetworkEndpoint instead. Edges: →Location (part_of, near - e.g., city→country)."
       fields:
+        - name: "type"
+          type: "str"
+          required: false
+          description: "Type: address, city, region, country, building, room, area"
         - name: "address"
           type: "str"
           required: false
@@ -233,30 +236,26 @@ graphiti:
           type: "str"
           required: false
           description: "GPS coordinates (lat,lon)"
-        - name: "type"
-          type: "str"
-          required: false
-          description: "Type: address, city, region, country, building, room, area"
 
     - name: "Event"
       description: "Time-bound occurrence, activity, or meeting. Edges: →Person (organizer, participant, speaker), →Location (venue), →Organization (host, sponsor), →NetworkEndpoint (meeting_link, registration_url), →Event (part_of, follows), →Project (milestone_of, belongs_to)."
       fields:
-        - name: "start_date"
-          type: "str"
-          required: false
-          description: "Start date/time (ISO 8601)"
-        - name: "end_date"
-          type: "str"
-          required: false
-          description: "End date/time (ISO 8601)"
-        - name: "status"
-          type: "str"
-          required: false
-          description: "Status: scheduled, in_progress, completed, cancelled"
         - name: "type"
           type: "str"
           required: false
           description: "Type: meeting, conference, deadline, milestone, incident, birthday, holiday"
+        - name: "status"
+          type: "str"
+          required: false
+          description: "Status: scheduled, in_progress, completed, cancelled"
+        - name: "start_date"
+          type: "str"
+          required: false
+          description: "Start date/time (YYYY-MM-DD or YYYY-MM-DDTHH:MM)"
+        - name: "end_date"
+          type: "str"
+          required: false
+          description: "End date/time (YYYY-MM-DD or YYYY-MM-DDTHH:MM)"
         - name: "recurrence"
           type: "str"
           required: false
@@ -363,7 +362,7 @@ graphiti:
         - name: "publication_date"
           type: "str"
           required: false
-          description: "Publication date (ISO 8601)"
+          description: "Publication date (YYYY-MM-DD)"
         - name: "format"
           type: "str"
           required: false
