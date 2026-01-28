@@ -457,6 +457,10 @@ graphiti:
     - name: "Method"
       description: "Function, method, or operation signature - single callable unit. Edges: →Component (belongs_to), →Interface (part_of), →DataModel (input, output), →Method (calls, overrides)."
       fields:
+        - name: "type"
+          type: "str"
+          required: false
+          description: "Type: sync, async, static, constructor, getter, setter"
         - name: "signature"
           type: "str"
           required: false
@@ -465,10 +469,6 @@ graphiti:
           type: "str"
           required: false
           description: "Visibility: public, private, protected, internal"
-        - name: "type"
-          type: "str"
-          required: false
-          description: "Type: sync, async, static, constructor, getter, setter"
         - name: "input_params"
           type: "str"
           required: false
@@ -514,6 +514,10 @@ graphiti:
     - name: "NetworkEndpoint"
       description: "Network address, URL, API endpoint, or connection URI. A URL IS a NetworkEndpoint. Edges: →Organization (owned_by, hosted_by), →Technology (serves, runs), →Location (hosted_in - data center location), →Interface (serves), →Component (hosts)."
       fields:
+        - name: "type"
+          type: "str"
+          required: false
+          description: "Type: api, database, website, service, ssh, vpn, websocket"
         - name: "protocol"
           type: "str"
           required: false
@@ -530,10 +534,6 @@ graphiti:
           type: "str"
           required: false
           description: "URL path or resource path"
-        - name: "type"
-          type: "str"
-          required: false
-          description: "Type: api, database, website, service, ssh, vpn, websocket"
 
     # === Knowledge Organization Entities ===
     - name: "Domain"
