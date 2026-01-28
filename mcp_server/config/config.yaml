@@ -144,6 +144,10 @@ graphiti:
     - name: "Person"
       description: "A human individual - user, contact, author, participant, or any named person. Edges: →Organization (employer, member_of), →Person (spouse, parent, child, sibling, friend, colleague), →Location (residence, birthplace, workplace), →Event (attends, organizes), →Project (leads, works_on), →Component (develops), →ArchitectureDecision (decided)."
       fields:
+        - name: "gender"
+          type: "str"
+          required: false
+          description: "Gender: male, female, other, unknown"
         - name: "title"
           type: "str"
           required: false
@@ -160,10 +164,6 @@ graphiti:
           type: "str"
           required: false
           description: "Last/family name"
-        - name: "email"
-          type: "str"
-          required: false
-          description: "Email address"
         - name: "phone"
           type: "str"
           required: false
@@ -172,14 +172,14 @@ graphiti:
           type: "str"
           required: false
           description: "Mobile phone number"
+        - name: "email"
+          type: "str"
+          required: false
+          description: "Email address"
         - name: "birth_date"
           type: "str"
           required: false
           description: "Date of birth (ISO 8601: YYYY-MM-DD)"
-        - name: "gender"
-          type: "str"
-          required: false
-          description: "Gender: male, female, other, unknown"
         - name: "nationality"
           type: "str"
           required: false
