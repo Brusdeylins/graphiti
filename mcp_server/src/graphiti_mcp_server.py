@@ -1175,8 +1175,11 @@ async def initialize_server() -> ServerConfig:
     graphiti_client = await graphiti_service.get_client()
     semaphore = graphiti_service.semaphore
 
-    # Initialize queue service with the client
-    await queue_service.initialize(graphiti_client)
+    # Initialize queue service with the client and entity types
+    await queue_service.initialize(
+        graphiti_client,
+        entity_types=graphiti_service.entity_types,
+    )
 
     # Set MCP server settings
     if config.server.host:

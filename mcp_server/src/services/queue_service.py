@@ -94,6 +94,7 @@ class QueueService:
         self._config = config or QueueConfig()
         self._redis: redis.Redis | None = None
         self._graphiti_client: Any = None
+        self._entity_types: Any = None  # Entity types for extraction
 
         # FIX: Task references stored to prevent GC collection
         self._worker_tasks: dict[str, asyncio.Task] = {}
@@ -112,15 +113,20 @@ class QueueService:
         return f'graphiti:queue:{group_id}:dlq'
 
     async def initialize(
-        self, graphiti_client: Any, redis_client: redis.Redis | None = None
+        self,
+        graphiti_client: Any,
+        redis_client: redis.Redis | None = None,
+        entity_types: Any = None,
     ) -> None:
         """Initialize with graphiti client and Redis connection.
 
         Args:
             graphiti_client: The Graphiti client instance for processing episodes
             redis_client: Optional Redis client (creates new if not provided)
+            entity_types: Entity types dict for extraction (passed to add_episode)
         """
         self._graphiti_client = graphiti_client
+        self._entity_types = entity_types
 
         if redis_client is not None:
             self._redis = redis_client
@@ -342,6 +348,7 @@ class QueueService:
                 group_id=group_id,
                 reference_time=datetime.now(timezone.utc),
                 uuid=episode.uuid,
+                entity_types=self._entity_types,
             )
 
             # Success: Acknowledge the message
