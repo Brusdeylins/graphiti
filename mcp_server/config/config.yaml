@@ -652,3 +652,64 @@ graphiti:
           type: "str"
           required: false
           description: "Serial number or unique identifier"
+
+    # === Activities, Strategies & Roles ===
+    - name: "Activity"
+      description: "Practice, sport, hobby, or activity - something you DO regularly or as a skill (Sales Call, Code Review, Trading, Negotiation, Presentation). Edges: →Product (requires_equipment), →Person (practiced_by), →Strategy (uses), →Activity (related_to, prerequisite_for), →Domain (belongs_to), →Role (performed_by)."
+      fields:
+        - name: "type"
+          type: "str"
+          required: false
+          description: "Type: sport, hobby, practice, exercise, game, craft, business_activity"
+        - name: "difficulty"
+          type: "str"
+          required: false
+          description: "Difficulty: beginner, intermediate, advanced, expert"
+        - name: "frequency"
+          type: "str"
+          required: false
+          description: "Frequency: daily, weekly, monthly, occasional, on_demand"
+        - name: "duration"
+          type: "str"
+          required: false
+          description: "Typical duration (e.g., '30min', '2h', '1 day')"
+
+    - name: "Strategy"
+      description: "Method, approach, tactic, or technique to achieve a goal (Covered Call, Cold Calling, A/B Testing, Agile, Cost Leadership). Edges: →Activity (used_in), →Product (involves), →Strategy (alternative_to, builds_on), →Concept (based_on), →Domain (belongs_to), →Goal (achieves)."
+      fields:
+        - name: "type"
+          type: "str"
+          required: false
+          description: "Type: trading, sales, marketing, management, optimization, risk_management"
+        - name: "complexity"
+          type: "str"
+          required: false
+          description: "Complexity: simple, moderate, complex, advanced"
+        - name: "risk_profile"
+          type: "str"
+          required: false
+          description: "Risk: conservative, moderate, aggressive"
+        - name: "time_horizon"
+          type: "str"
+          required: false
+          description: "Time horizon: short_term, medium_term, long_term"
+
+    - name: "Role"
+      description: "Function or part someone plays in a specific context (Account Manager, Scrum Master, Investor, Stakeholder, Team Lead). Edges: →Person (played_by), →Activity (performs), →Organization (within), →Role (reports_to, collaborates_with), →Requirement (responsible_for)."
+      fields:
+        - name: "type"
+          type: "str"
+          required: false
+          description: "Type: professional, organizational, project, social, hierarchical"
+        - name: "context"
+          type: "str"
+          required: false
+          description: "Context where this role applies"
+        - name: "responsibilities"
+          type: "str"
+          required: false
+          description: "Key responsibilities (comma-separated)"
+        - name: "authority_level"
+          type: "str"
+          required: false
+          description: "Authority: executive, manager, lead, contributor, observer"
