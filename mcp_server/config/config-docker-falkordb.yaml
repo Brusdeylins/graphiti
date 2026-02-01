@@ -644,6 +644,10 @@ graphiti:
           type: "str"
           required: false
           description: "Serial number or unique identifier"
+        - name: "version"
+          type: "str"
+          required: false
+          description: "Version, year, or revision (e.g., '2023', 'M3 Pro', 'v2')"
 
     # === Activities, Strategies & Roles ===
     - name: "Activity"
