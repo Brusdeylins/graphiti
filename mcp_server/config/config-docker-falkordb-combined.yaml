@@ -604,7 +604,11 @@ graphiti:
         - name: "identifier"
           type: "str"
           required: false
-          description: "Unique ID: SKU, ticker, ISIN, VIN, serial number"
+          description: "Unique ID: SKU, ticker, ISIN, VIN"
+        - name: "serial_number"
+          type: "str"
+          required: false
+          description: "Serial number of owned instance"
         - name: "version"
           type: "str"
           required: false
@@ -631,28 +635,12 @@ graphiti:
           description: "Individual pet name if owned (e.g., 'Whiskers', 'Bello')"
 
     - name: "Item"
-      description: "Personal possession or owned INSTANCE of a product - a specific object belonging to someone (e.g., 'my MacBook Pro', 'Peters Auto'). NEVER use for generic products, toys, or objects - use Product instead. Edges: →Person (owned_by, used_by), →Organization (owned_by), →Location (located_at), →Product (instance_of)."
+      description: "Generic object that is NOT a product - use ONLY for things without brand/model like heirlooms, found objects, handmade items, or unidentifiable objects (e.g., 'Grandma's ring', 'flea market find', 'handmade shelf'). For products with brand/model use Product instead. Edges: →Person (owned_by, found_by, made_by), →Location (found_at, located_at)."
       fields:
         - name: "type"
           type: "str"
           required: false
-          description: "Category: device, tool, furniture, vehicle, appliance"
-        - name: "brand"
-          type: "str"
-          required: false
-          description: "Manufacturer or brand name"
-        - name: "model"
-          type: "str"
-          required: false
-          description: "Model number or name"
-        - name: "serial_number"
-          type: "str"
-          required: false
-          description: "Serial number or unique identifier"
-        - name: "version"
-          type: "str"
-          required: false
-          description: "Version, year, or revision (e.g., '2023', 'M3 Pro', 'v2')"
+          description: "Category: heirloom, handmade, found_object, antique, artifact, unknown"
 
     # === Activities, Strategies & Roles ===
     - name: "Activity"
