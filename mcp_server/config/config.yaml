@@ -633,6 +633,22 @@ graphiti:
           required: false
           description: "Price or price range with currency"
 
+    - name: "Animal"
+      description: "Living creature - pet, wild animal, livestock, or animal species (cats, dogs, horses, birds, fish, etc.). Use for both specific pets and general species. Edges: →Person (owner, caretaker), →Organization (owned_by, shelter, zoo), →Location (habitat, lives_at), →Product (food, toy, accessory)."
+      fields:
+        - name: "species"
+          type: "str"
+          required: false
+          description: "Species: cat, dog, horse, bird, fish, cow, pig, etc."
+        - name: "breed"
+          type: "str"
+          required: false
+          description: "Breed if applicable (e.g., 'Maine Coon', 'Labrador')"
+        - name: "pet_name"
+          type: "str"
+          required: false
+          description: "Individual pet name if owned (e.g., 'Whiskers', 'Bello')"
+
     - name: "Item"
       description: "Personal possession or owned INSTANCE of a product - a specific object belonging to someone (e.g., 'my MacBook Pro', 'Peters Auto'). NEVER use for generic products, toys, or objects - use Product instead. Edges: →Person (owned_by, used_by), →Organization (owned_by), →Location (located_at), →Product (instance_of)."
       fields:
