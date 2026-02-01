@@ -285,7 +285,7 @@ graphiti:
           description: "Version number (semver)"
 
     - name: "UseCase"
-      description: "User interaction scenario with system - fachlicher Anwendungsfall. Edges: →Person (actor), →UseCase (extends, includes), →Requirement (satisfies), →Component (implemented_by), →Project (belongs_to), →BusinessRule (constrained_by)."
+      description: "User interaction scenario with system - fachlicher Anwendungsfall. Edges: →Person (actor), →UseCase (extends, includes), →Requirement (satisfies), →Component (implemented_by), →Project (belongs_to), →Rule (constrained_by)."
       fields:
         - name: "actor"
           type: "str"
@@ -312,8 +312,8 @@ graphiti:
           required: false
           description: "Status: draft, approved, implemented, tested"
 
-    - name: "BusinessRule"
-      description: "Business constraint, policy, or decision logic. Edges: →Condition (evaluates, triggered_by), →Organization (enterprise_policy_of), →Project (applies_in), →Requirement (implements, derived_from), →Domain (belongs_to), →UseCase (enforced_in), →Component (enforced_by)."
+    - name: "Rule"
+      description: "Constraint, policy, or decision logic (game rules, business rules, etc.). Edges: →Condition (evaluates, triggered_by), →Organization (enterprise_policy_of), →Project (applies_in), →Requirement (implements, derived_from), →Domain (belongs_to), →UseCase (enforced_in), →Component (enforced_by)."
       fields:
         - name: "type"
           type: "str"
@@ -333,7 +333,7 @@ graphiti:
           description: "Scope: enterprise, project, domain, process"
 
     - name: "Condition"
-      description: "Logical condition for boolean expressions. Build complex logic via edges: requires_all (AND), requires_any (OR), negates (NOT). Leaf conditions have no children. Edges: →Condition (requires_all, requires_any, negates), →BusinessRule (triggers, part_of), →Fact (evaluates), →Event (triggered_by)."
+      description: "Logical condition for boolean expressions. Build complex logic via edges: requires_all (AND), requires_any (OR), negates (NOT). Leaf conditions have no children. Edges: →Condition (requires_all, requires_any, negates), →Rule (triggers, part_of), →Fact (evaluates), →Event (triggered_by)."
       fields:
         - name: "operator"
           type: "str"
