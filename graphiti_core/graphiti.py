@@ -1694,9 +1694,11 @@ class Graphiti:
         valid_at: datetime | None = None,
         invalid_at: datetime | None = None,
         attributes: dict | None = None,
+        source_description: str = 'Manual entry',
+        create_episode: bool = True,
     ) -> EntityEdge:
         """
-        Create a new entity edge with auto-generated embedding.
+        Create a new entity edge with auto-generated embedding and optional episode.
 
         Parameters
         ----------
@@ -1716,6 +1718,10 @@ class Graphiti:
             When the fact stopped being true.
         attributes : dict | None, optional
             Additional attributes for the edge.
+        source_description : str, optional
+            Description of the data source (default: 'Manual entry').
+        create_episode : bool, optional
+            Whether to create an episode for traceability (default: True).
 
         Returns
         -------
@@ -1723,6 +1729,21 @@ class Graphiti:
             The created entity edge with embedding.
         """
         now = utc_now()
+        episode_uuid = None
+
+        # Create episode for traceability if requested
+        if create_episode and fact:
+            episode = EpisodicNode(
+                name=f'{name}: {fact[:50]}{"..." if len(fact) > 50 else ""}',
+                group_id=group_id,
+                source=EpisodeType.text,
+                source_description=source_description,
+                content=fact,
+                created_at=now,
+                valid_at=valid_at or now,
+            )
+            await episode.save(self.driver)
+            episode_uuid = episode.uuid
 
         edge = EntityEdge(
             source_node_uuid=source_node_uuid,
@@ -1734,10 +1755,17 @@ class Graphiti:
             valid_at=valid_at,
             invalid_at=invalid_at,
             attributes=attributes or {},
+            episodes=[episode_uuid] if episode_uuid else [],
         )
 
         await edge.generate_embedding(self.embedder)
         await edge.save(self.driver)
+
+        # Update episode with edge reference (bidirectional link)
+        if episode_uuid:
+            episode.entity_edges = [edge.uuid]
+            await episode.save(self.driver)
+
         return edge
 
     async def get_edge(self, uuid: str) -> EntityEdge:
