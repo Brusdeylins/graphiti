@@ -274,6 +274,130 @@ class NeptuneDriver(GraphDriver):
 
         return 0
 
+    async def copy_group(self, source_group_id: str, target_group_id: str) -> None:
+        """
+        Copy all nodes and edges from one group to another using Cypher.
+
+        In Neptune, group_id is a property on nodes and relationships.
+        This creates new nodes/edges with new UUIDs and the target group_id.
+        """
+        import uuid as uuid_mod
+
+        if source_group_id == target_group_id:
+            raise ValueError('Source and target group IDs must be different')
+
+        # Copy Entity nodes - Neptune doesn't support dynamic property copy well,
+        # so we select and recreate each node
+        result, _, _ = await self.execute_query(
+            """
+            MATCH (n:Entity)
+            WHERE n.group_id = $source_group_id
+            RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary,
+                   n.created_at AS created_at, n.name_embedding AS name_embedding,
+                   n.summary_embedding AS summary_embedding, n.attributes AS attributes,
+                   labels(n) AS labels
+            """,
+            source_group_id=source_group_id,
+        )
+        for record in result:
+            new_uuid = str(uuid_mod.uuid4())
+            await self.execute_query(
+                """
+                CREATE (n:Entity {
+                    uuid: $uuid,
+                    name: $name,
+                    group_id: $group_id,
+                    summary: $summary,
+                    created_at: $created_at,
+                    name_embedding: $name_embedding,
+                    summary_embedding: $summary_embedding,
+                    attributes: $attributes
+                })
+                """,
+                uuid=new_uuid,
+                name=record.get('name'),
+                group_id=target_group_id,
+                summary=record.get('summary'),
+                created_at=record.get('created_at'),
+                name_embedding=record.get('name_embedding'),
+                summary_embedding=record.get('summary_embedding'),
+                attributes=record.get('attributes'),
+            )
+
+        # Copy Episodic nodes
+        result, _, _ = await self.execute_query(
+            """
+            MATCH (n:Episodic)
+            WHERE n.group_id = $source_group_id
+            RETURN n.uuid AS uuid, n.name AS name, n.content AS content,
+                   n.source AS source, n.source_description AS source_description,
+                   n.created_at AS created_at, n.valid_at AS valid_at,
+                   n.entity_edges AS entity_edges
+            """,
+            source_group_id=source_group_id,
+        )
+        for record in result:
+            new_uuid = str(uuid_mod.uuid4())
+            await self.execute_query(
+                """
+                CREATE (n:Episodic {
+                    uuid: $uuid,
+                    name: $name,
+                    group_id: $group_id,
+                    content: $content,
+                    source: $source,
+                    source_description: $source_description,
+                    created_at: $created_at,
+                    valid_at: $valid_at,
+                    entity_edges: $entity_edges
+                })
+                """,
+                uuid=new_uuid,
+                name=record.get('name'),
+                group_id=target_group_id,
+                content=record.get('content'),
+                source=record.get('source'),
+                source_description=record.get('source_description'),
+                created_at=record.get('created_at'),
+                valid_at=record.get('valid_at'),
+                entity_edges=record.get('entity_edges'),
+            )
+
+        logger.info(f'Copied group {source_group_id} to {target_group_id}')
+
+    async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
+        """
+        Rename a group by updating the group_id property on all nodes and edges.
+
+        In Neptune, this is a simple property update operation.
+        """
+        if old_group_id == new_group_id:
+            raise ValueError('Old and new group IDs must be different')
+
+        # Update all nodes
+        await self.execute_query(
+            """
+            MATCH (n)
+            WHERE n.group_id = $old_group_id
+            SET n.group_id = $new_group_id
+            """,
+            old_group_id=old_group_id,
+            new_group_id=new_group_id,
+        )
+
+        # Update all relationships
+        await self.execute_query(
+            """
+            MATCH ()-[r]->()
+            WHERE r.group_id = $old_group_id
+            SET r.group_id = $new_group_id
+            """,
+            old_group_id=old_group_id,
+            new_group_id=new_group_id,
+        )
+
+        logger.info(f'Renamed group {old_group_id} to {new_group_id}')
+
 
 class NeptuneDriverSession(GraphDriverSession):
     provider = GraphProvider.NEPTUNE

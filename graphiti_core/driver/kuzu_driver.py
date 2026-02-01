@@ -151,6 +151,129 @@ class KuzuDriver(GraphDriver):
         conn.execute(SCHEMA_QUERIES)
         conn.close()
 
+    async def copy_group(self, source_group_id: str, target_group_id: str) -> None:
+        """
+        Copy all nodes from one group to another using Cypher.
+
+        In Kuzu, group_id is a property on nodes. This creates new nodes
+        with new UUIDs and the target group_id.
+
+        Note: Kuzu has an explicit schema, so we copy each node type separately.
+        Relationships are not copied as they reference specific node UUIDs.
+        """
+        import uuid as uuid_mod
+
+        if source_group_id == target_group_id:
+            raise ValueError('Source and target group IDs must be different')
+
+        # Copy Entity nodes (one by one to generate unique UUIDs)
+        records, _, _ = await self.execute_query(
+            'MATCH (n:Entity) WHERE n.group_id = $source_group_id RETURN n',
+            source_group_id=source_group_id,
+        )
+        for record in records:
+            node = record.get('n', {})
+            await self.execute_query(
+                """
+                CREATE (copy:Entity {
+                    uuid: $uuid,
+                    name: $name,
+                    group_id: $group_id,
+                    labels: $labels,
+                    created_at: $created_at,
+                    name_embedding: $name_embedding,
+                    summary: $summary,
+                    attributes: $attributes
+                })
+                """,
+                uuid=str(uuid_mod.uuid4()),
+                name=node.get('name'),
+                group_id=target_group_id,
+                labels=node.get('labels'),
+                created_at=node.get('created_at'),
+                name_embedding=node.get('name_embedding'),
+                summary=node.get('summary'),
+                attributes=node.get('attributes'),
+            )
+
+        # Copy Episodic nodes
+        records, _, _ = await self.execute_query(
+            'MATCH (n:Episodic) WHERE n.group_id = $source_group_id RETURN n',
+            source_group_id=source_group_id,
+        )
+        for record in records:
+            node = record.get('n', {})
+            await self.execute_query(
+                """
+                CREATE (copy:Episodic {
+                    uuid: $uuid,
+                    name: $name,
+                    group_id: $group_id,
+                    created_at: $created_at,
+                    source: $source,
+                    source_description: $source_description,
+                    content: $content,
+                    valid_at: $valid_at,
+                    entity_edges: $entity_edges
+                })
+                """,
+                uuid=str(uuid_mod.uuid4()),
+                name=node.get('name'),
+                group_id=target_group_id,
+                created_at=node.get('created_at'),
+                source=node.get('source'),
+                source_description=node.get('source_description'),
+                content=node.get('content'),
+                valid_at=node.get('valid_at'),
+                entity_edges=node.get('entity_edges'),
+            )
+
+        logger.info(f'Copied group {source_group_id} to {target_group_id}')
+
+    async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
+        """
+        Rename a group by updating the group_id property on all nodes.
+
+        In Kuzu, this is a property update operation on each node type.
+        """
+        if old_group_id == new_group_id:
+            raise ValueError('Old and new group IDs must be different')
+
+        # Update Entity nodes
+        await self.execute_query(
+            """
+            MATCH (n:Entity)
+            WHERE n.group_id = $old_group_id
+            SET n.group_id = $new_group_id
+            """,
+            old_group_id=old_group_id,
+            new_group_id=new_group_id,
+        )
+
+        # Update Episodic nodes
+        await self.execute_query(
+            """
+            MATCH (n:Episodic)
+            WHERE n.group_id = $old_group_id
+            SET n.group_id = $new_group_id
+            """,
+            old_group_id=old_group_id,
+            new_group_id=new_group_id,
+        )
+
+        # Update RelatesToNode_ (edge nodes in Kuzu's schema)
+        await self.execute_query(
+            """
+            MATCH (n:RelatesToNode_)
+            WHERE n.group_id = $old_group_id
+            SET n.group_id = $new_group_id
+            """,
+            old_group_id=old_group_id,
+            new_group_id=new_group_id,
+        )
+
+        logger.info(f'Renamed group {old_group_id} to {new_group_id}')
+
 
 class KuzuDriverSession(GraphDriverSession):
     provider = GraphProvider.KUZU
