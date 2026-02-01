@@ -231,11 +231,24 @@ class DatabaseConfig(BaseModel):
     providers: DatabaseProvidersConfig = Field(default_factory=DatabaseProvidersConfig)
 
 
+class EntityTypeFieldConfig(BaseModel):
+    """Entity type field configuration for structured attribute extraction."""
+
+    name: str = Field(..., description='Field name (must be valid Python identifier)')
+    type: str = Field(default='str', description='Field type: str, int, float, bool')
+    required: bool = Field(default=False, description='Whether the field is required')
+    description: str = Field(default='', description='Field description for LLM extraction')
+
+
 class EntityTypeConfig(BaseModel):
-    """Entity type configuration."""
+    """Entity type configuration with optional structured fields."""
 
     name: str
     description: str
+    fields: list[EntityTypeFieldConfig] = Field(
+        default_factory=list,
+        description='Optional list of structured fields for attribute extraction',
+    )
 
 
 class GraphitiAppConfig(BaseModel):

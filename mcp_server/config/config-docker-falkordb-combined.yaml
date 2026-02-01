@@ -85,22 +85,65 @@ graphiti:
   group_id: ${GRAPHITI_GROUP_ID:main}
   episode_id_prefix: ${EPISODE_ID_PREFIX:}
   user_id: ${USER_ID:mcp_user}
+  # Entity types - compact version (see config.yaml for full definitions with fields)
+  # DESIGN: Fields = scalar values, Edges = relationships (auto-extracted by LLM)
   entity_types:
-    - name: "Preference"
-      description: "User preferences, choices, opinions, or selections (PRIORITIZE over most other types except User/Assistant)"
-    - name: "Requirement"
-      description: "Specific needs, features, or functionality that must be fulfilled"
-    - name: "Procedure"
-      description: "Standard operating procedures and sequential instructions"
-    - name: "Location"
-      description: "Physical or virtual places where activities occur"
-    - name: "Event"
-      description: "Time-bound activities, occurrences, or experiences"
+    # === Project Management ===
+    - name: "Project"
+      description: "Software, research, or business project - the top-level container. Edges: →Person (owner, lead, team_member), →Organization (client, contractor, sponsor), →Technology (uses), →Component (contains), →Requirement (has), →Document (has), →Domain (field_of)."
+    # === Core Personal/Organizational ===
+    - name: "Person"
+      description: "A human individual. Edges: →Organization (employer, member_of), →Person (spouse, parent, child, sibling, friend, colleague), →Location (residence, birthplace, workplace), →Event (attends, organizes), →Project (leads, works_on), →Component (develops), →ArchitectureDecision (decided)."
     - name: "Organization"
-      description: "Companies, institutions, groups, or formal entities"
+      description: "Company, institution, team, group. Edges: →Location (headquarters, branch, office), →Person (founder, ceo, employee, member), →Organization (parent_company, subsidiary, partner), →NetworkEndpoint (website, api), →Project (owns, sponsors, executes)."
+    # === Spatial/Temporal ===
+    - name: "Location"
+      description: "Physical place or geographic area. Edges: →Location (part_of, near)."
+    - name: "Event"
+      description: "Time-bound occurrence, activity, or meeting. Edges: →Person (organizer, participant, speaker), →Location (venue), →Organization (host, sponsor), →NetworkEndpoint (meeting_link), →Event (part_of, follows), →Project (milestone_of, belongs_to)."
+    # === User Preference ===
+    - name: "Preference"
+      description: "User choice, opinion, setting - PRIORITIZE for personal preferences. Edges: →Person (held_by), →Topic (about), →Technology (prefers)."
+    # === Requirements & Business Analysis ===
+    - name: "Requirement"
+      description: "Functional or non-functional requirement. Edges: →Person (requested_by, assigned_to), →Organization (stakeholder), →Technology (requires, implements), →Requirement (depends_on, conflicts_with), →Project (belongs_to), →UseCase (satisfied_by), →Component (implemented_by)."
+    - name: "UseCase"
+      description: "User interaction scenario - fachlicher Anwendungsfall. Edges: →Person (actor), →UseCase (extends, includes), →Requirement (satisfies), →Component (implemented_by), →Project (belongs_to), →BusinessRule (constrained_by)."
+    - name: "BusinessRule"
+      description: "Business constraint, policy, or decision logic. Edges: →Organization (enterprise_policy_of), →Project (applies_in), →Requirement (implements, derived_from), →Domain (belongs_to), →UseCase (enforced_in), →Component (enforced_by)."
+    # === Document/Content ===
     - name: "Document"
-      description: "Information content in various forms (books, articles, reports, etc.)"
+      description: "Information resource: file, article, report, book. Edges: →Person (author, editor, reviewer), →Organization (publisher), →Topic (about), →Document (references, version_of), →NetworkEndpoint (url, download_link), →Project (belongs_to), →UseCase (documents), →Interface (documents), →ArchitectureDecision (documents), →DataModel (documents)."
+    # === Operational ===
+    - name: "Procedure"
+      description: "Step-by-step process, workflow. Edges: →Person (responsible, executor), →Technology (uses), →Document (documented_in), →Procedure (sub_procedure, follows), →UseCase (implements), →Project (belongs_to)."
+    # === Architecture & Design ===
+    - name: "ArchitectureDecision"
+      description: "Architecture Decision Record (ADR). Edges: →Technology (involves), →Component (affects), →ArchitectureDecision (supersedes), →Person (decided_by), →Project (belongs_to), →Document (documented_in)."
+    - name: "Component"
+      description: "Software module, service, or package. Edges: →Component (depends_on, contains), →Interface (exposes, consumes), →Technology (built_with), →Project (part_of), →Person (developed_by, maintained_by), →ArchitectureDecision (affected_by)."
+    - name: "Interface"
+      description: "API contract or service boundary - collection of methods/endpoints. Edges: →Component (exposed_by, consumed_by), →Method (contains), →NetworkEndpoint (available_at), →Document (documented_in), →Technology (protocol)."
+    - name: "Method"
+      description: "Function, method, or operation signature. Edges: →Component (belongs_to), →Interface (part_of), →DataModel (input, output), →Method (calls, overrides)."
+    - name: "DataModel"
+      description: "Data structure, schema, or type definition. Edges: →Interface (used_by), →Component (owned_by), →DataModel (references, extends), →Technology (defined_in), →Document (documented_in)."
+    # === Technical ===
+    - name: "Technology"
+      description: "Software, tool, framework, language. Edges: →Technology (depends_on, alternative_to, built_with), →Organization (developed_by, maintained_by), →NetworkEndpoint (repository, documentation, homepage), →Domain (belongs_to), →Component (used_in), →DataModel (defines), →Interface (implements)."
+    - name: "NetworkEndpoint"
+      description: "Network address, URL, API endpoint, or connection URI. Edges: →Organization (owned_by, hosted_by), →Technology (serves, runs), →Location (hosted_in), →Interface (serves), →Component (hosts)."
+    # === Knowledge Organization ===
+    - name: "Domain"
+      description: "Knowledge domain, field of expertise. Edges: →Domain (parent_domain, related_to), →Project (field_of), →Term (contains)."
     - name: "Topic"
-      description: "Subject of conversation, interest, or knowledge domain (use as last resort)"
-    - name: "Object"
-      description: "Physical items, tools, devices, or possessions (use as last resort)"
+      description: "Specific subject or theme within a domain. Edges: →Domain (belongs_to), →Topic (related_to, prerequisite_of), →Project (about), →Term (has_term)."
+    - name: "Term"
+      description: "Domain-specific term, concept, or glossary entry - Fachbegriff. Edges: →Domain (belongs_to), →Term (synonym_of, see_also), →Document (defined_in), →Concept (used_in)."
+    - name: "Concept"
+      description: "Abstract idea, theory, model, or principle - from books, papers, or established knowledge. Edges: →Domain (belongs_to), →Topic (part_of), →Concept (builds_on, contradicts, extends), →Person (developed_by), →Document (described_in), →Term (uses), →Fact (supported_by)."
+    - name: "Fact"
+      description: "Asserted statement or claim from a source - verifiable information from books or research. Edges: →Document (source), →Concept (supports, contradicts), →Fact (derived_from, contradicts), →Person (stated_by), →Topic (about)."
+    # === Physical Items ===
+    - name: "Item"
+      description: "Physical object, device, or tangible thing. Edges: →Person (owned_by, used_by), →Organization (owned_by, manufactured_by), →Location (located_at)."

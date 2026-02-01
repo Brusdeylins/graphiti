@@ -19,11 +19,12 @@ from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, create_model
 from starlette.responses import JSONResponse
 
 from config.schema import GraphitiConfig, ServerConfig
 from models.response_types import (
+    EntityTypesResponse,
     EpisodeSearchResponse,
     ErrorResponse,
     FactSearchResponse,
@@ -34,6 +35,7 @@ from models.response_types import (
 )
 from services.factories import DatabaseDriverFactory, EmbedderFactory, LLMClientFactory
 from services.queue_service import QueueConfig, QueueService
+from services.entity_type_service import EntityTypeService
 from utils.formatting import format_fact_result
 
 # Load .env file from mcp_server directory
@@ -172,6 +174,7 @@ mcp = FastMCP(
 # Global services
 graphiti_service: Optional['GraphitiService'] = None
 queue_service: QueueService | None = None
+entity_type_service: EntityTypeService | None = None
 
 # Global client for backward compatibility
 graphiti_client: Graphiti | None = None
@@ -181,12 +184,18 @@ semaphore: asyncio.Semaphore
 class GraphitiService:
     """Graphiti service using the unified configuration system."""
 
-    def __init__(self, config: GraphitiConfig, semaphore_limit: int = 10):
+    def __init__(
+        self,
+        config: GraphitiConfig,
+        semaphore_limit: int = 10,
+        entity_type_svc: EntityTypeService | None = None,
+    ):
         self.config = config
         self.semaphore_limit = semaphore_limit
         self.semaphore = asyncio.Semaphore(semaphore_limit)
         self.client: Graphiti | None = None
         self.entity_types = None
+        self._entity_type_service = entity_type_svc
 
     async def initialize(self) -> None:
         """Initialize the Graphiti client with factory-created components."""
@@ -210,21 +219,56 @@ class GraphitiService:
             # Get database configuration
             db_config = DatabaseDriverFactory.create_config(self.config.database)
 
-            # Build entity types from configuration
+            # Get entity types from EntityTypeService (DB) or fall back to config
             custom_types = None
-            if self.config.graphiti.entity_types:
+            if self._entity_type_service:
+                # Use entity types from database
+                custom_types = await self._entity_type_service.get_as_pydantic_models()
+                if custom_types:
+                    logger.info(
+                        f'Loaded {len(custom_types)} entity types from database: '
+                        f'{list(custom_types.keys())}'
+                    )
+            elif self.config.graphiti.entity_types:
+                # Fallback: Build entity types from configuration (legacy mode)
                 custom_types = {}
                 for entity_type in self.config.graphiti.entity_types:
-                    # Create a dynamic Pydantic model for each entity type
-                    # Note: Don't use 'name' as it's a protected Pydantic attribute
-                    entity_model = type(
+                    # Build field definitions if entity type has fields
+                    field_definitions: dict[str, Any] = {}
+                    if entity_type.fields:
+                        type_mapping = {
+                            'str': str,
+                            'int': int,
+                            'float': float,
+                            'bool': bool,
+                        }
+                        for field_config in entity_type.fields:
+                            python_type = type_mapping.get(field_config.type, str)
+                            if field_config.required:
+                                field_definitions[field_config.name] = (
+                                    python_type,
+                                    Field(..., description=field_config.description),
+                                )
+                            else:
+                                field_definitions[field_config.name] = (
+                                    python_type | None,
+                                    Field(default=None, description=field_config.description),
+                                )
+
+                    # Create dynamic Pydantic model with optional fields
+                    entity_model = create_model(
                         entity_type.name,
-                        (BaseModel,),
-                        {
-                            '__doc__': entity_type.description,
-                        },
+                        __doc__=entity_type.description,
+                        **field_definitions,
                     )
                     custom_types[entity_type.name] = entity_model
+
+                    if field_definitions:
+                        logger.info(
+                            f'Entity type "{entity_type.name}" with fields: '
+                            f'{list(field_definitions.keys())}'
+                        )
+                logger.warning('Using legacy config-based entity types (EntityTypeService not available)')
 
             # Store entity types for later use
             self.entity_types = custom_types
@@ -773,15 +817,217 @@ async def get_status() -> StatusResponse:
         )
 
 
+@mcp.tool()
+async def get_entity_types() -> EntityTypesResponse | ErrorResponse:
+    """Get all configured entity types with their fields.
+
+    Returns the list of entity types that are used for knowledge extraction.
+    Each entity type has a name, description (used as LLM prompt), and optional
+    structured fields for attribute extraction.
+
+    Use this to understand what types of entities and attributes will be
+    extracted when adding memories to the graph.
+    """
+    global entity_type_service
+
+    if entity_type_service is None:
+        return ErrorResponse(error='EntityTypeService not initialized')
+
+    try:
+        # Get entity types from database
+        entity_types = await entity_type_service.get_all()
+        entity_types_list = []
+
+        for et in entity_types:
+            entity_types_list.append({
+                'name': et.name,
+                'description': et.description,
+                'fields': et.fields,
+                'source': et.source,
+                'created_at': et.created_at,
+                'modified_at': et.modified_at,
+            })
+
+        return EntityTypesResponse(
+            message=f'Found {len(entity_types_list)} entity types',
+            entity_types=entity_types_list,
+        )
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error getting entity types: {error_msg}')
+        return ErrorResponse(error=f'Error getting entity types: {error_msg}')
+
+
 @mcp.custom_route('/health', methods=['GET'])
 async def health_check(request) -> JSONResponse:
     """Health check endpoint for Docker and load balancers."""
     return JSONResponse({'status': 'healthy', 'service': 'graphiti-mcp'})
 
 
+# =============================================================================
+# Entity Type Management REST API
+# =============================================================================
+
+
+@mcp.custom_route('/entity-types', methods=['GET'])
+async def list_entity_types(request) -> JSONResponse:
+    """List all entity types."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=503)
+
+    try:
+        entity_types = await entity_type_service.get_all()
+        return JSONResponse({
+            'entity_types': [et.to_dict() for et in entity_types],
+            'count': len(entity_types),
+        })
+    except Exception as e:
+        logger.error(f'Error listing entity types: {str(e)}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types', methods=['POST'])
+async def create_entity_type(request) -> JSONResponse:
+    """Create a new entity type."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=503)
+
+    try:
+        body = await request.json()
+        name = body.get('name')
+        description = body.get('description', '')
+        fields = body.get('fields', [])
+
+        if not name:
+            return JSONResponse({'error': 'Name is required'}, status_code=400)
+
+        entity_type = await entity_type_service.create(
+            name=name,
+            description=description,
+            fields=fields,
+        )
+
+        logger.info(f'Created entity type: {name}')
+        return JSONResponse(entity_type.to_dict(), status_code=201)
+
+    except ValueError as e:
+        return JSONResponse({'error': str(e)}, status_code=409)
+    except Exception as e:
+        logger.error(f'Error creating entity type: {str(e)}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types/{name}', methods=['GET'])
+async def get_entity_type(request) -> JSONResponse:
+    """Get an entity type by name."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=503)
+
+    try:
+        name = request.path_params.get('name')
+        entity_type = await entity_type_service.get_by_name(name)
+
+        if not entity_type:
+            return JSONResponse({'error': f'Entity type "{name}" not found'}, status_code=404)
+
+        return JSONResponse(entity_type.to_dict())
+
+    except Exception as e:
+        logger.error(f'Error getting entity type: {str(e)}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types/{name}', methods=['PUT'])
+async def update_entity_type(request) -> JSONResponse:
+    """Update an entity type."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=503)
+
+    try:
+        name = request.path_params.get('name')
+        body = await request.json()
+
+        description = body.get('description')
+        fields = body.get('fields')
+
+        entity_type = await entity_type_service.update(
+            name=name,
+            description=description,
+            fields=fields,
+        )
+
+        logger.info(f'Updated entity type: {name}')
+        return JSONResponse(entity_type.to_dict())
+
+    except ValueError as e:
+        return JSONResponse({'error': str(e)}, status_code=404)
+    except Exception as e:
+        logger.error(f'Error updating entity type: {str(e)}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types/{name}', methods=['DELETE'])
+async def delete_entity_type(request) -> JSONResponse:
+    """Delete an entity type."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=503)
+
+    try:
+        name = request.path_params.get('name')
+        deleted = await entity_type_service.delete(name)
+
+        if not deleted:
+            return JSONResponse({'error': f'Entity type "{name}" not found'}, status_code=404)
+
+        logger.info(f'Deleted entity type: {name}')
+        return JSONResponse({'message': f'Entity type "{name}" deleted'})
+
+    except Exception as e:
+        logger.error(f'Error deleting entity type: {str(e)}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types/reset', methods=['POST'])
+async def reset_entity_types(request) -> JSONResponse:
+    """Reset entity types to defaults from config.yaml.
+
+    Deletes all entity types from Redis and re-seeds from config.
+    """
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=503)
+
+    try:
+        count = await entity_type_service.reset_to_defaults()
+        logger.info(f'Reset entity types to {count} defaults from config')
+        return JSONResponse({
+            'message': f'Entity types reset to {count} defaults from config',
+            'count': count,
+        })
+
+    except RuntimeError as e:
+        logger.error(f'Error resetting entity types: {str(e)}')
+        return JSONResponse({'error': str(e)}, status_code=400)
+
+    except Exception as e:
+        logger.error(f'Error resetting entity types: {str(e)}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
 async def initialize_server() -> ServerConfig:
     """Parse CLI arguments and initialize the Graphiti server configuration."""
-    global config, graphiti_service, queue_service, graphiti_client, semaphore
+    global config, graphiti_service, queue_service, entity_type_service, graphiti_client, semaphore
 
     parser = argparse.ArgumentParser(
         description='Run the Graphiti MCP server with YAML configuration support'
@@ -903,8 +1149,18 @@ async def initialize_server() -> ServerConfig:
         await clear_data(client.driver)
         logger.info('All graphs destroyed')
 
+    # Initialize EntityTypeService first (for seeding from config and DB storage)
+    entity_type_service = EntityTypeService()
+    db_config = DatabaseDriverFactory.create_config(config.database)
+    await entity_type_service.initialize(
+        host=db_config.get('host', 'localhost'),
+        port=db_config.get('port', 6379),
+        password=db_config.get('password'),
+        config=config,
+    )
+
     # Initialize services
-    graphiti_service = GraphitiService(config, SEMAPHORE_LIMIT)
+    graphiti_service = GraphitiService(config, SEMAPHORE_LIMIT, entity_type_service)
 
     # Get Redis URL from FalkorDB config for the queue service
     redis_url = 'redis://localhost:6379'  # default
@@ -913,15 +1169,17 @@ async def initialize_server() -> ServerConfig:
 
     queue_config = QueueConfig(redis_url=redis_url)
     queue_service = QueueService(config=queue_config)
-
     await graphiti_service.initialize()
 
     # Set global client for backward compatibility
     graphiti_client = await graphiti_service.get_client()
     semaphore = graphiti_service.semaphore
 
-    # Initialize queue service with the client
-    await queue_service.initialize(graphiti_client)
+    # Initialize queue service with the client and entity types
+    await queue_service.initialize(
+        graphiti_client,
+        entity_types=graphiti_service.entity_types,
+    )
 
     # Set MCP server settings
     if config.server.host:
