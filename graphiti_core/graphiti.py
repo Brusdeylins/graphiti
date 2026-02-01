@@ -1538,3 +1538,453 @@ class Graphiti:
         await Node.delete_by_uuids(self.driver, [node.uuid for node in nodes_to_delete])
 
         await episode.delete(self.driver)
+
+    # =========================================================================
+    # CRUD Operations for Entities, Edges, and Episodes
+    # =========================================================================
+
+    async def create_entity(
+        self,
+        name: str,
+        group_id: str,
+        entity_type: str = 'Entity',
+        summary: str = '',
+        attributes: dict | None = None,
+    ) -> EntityNode:
+        """
+        Create a new entity node with auto-generated embeddings.
+
+        Parameters
+        ----------
+        name : str
+            The name of the entity.
+        group_id : str
+            The group ID for graph partitioning.
+        entity_type : str, optional
+            The type/label of the entity. Defaults to 'Entity'.
+        summary : str, optional
+            A summary description of the entity.
+        attributes : dict | None, optional
+            Additional attributes for the entity.
+
+        Returns
+        -------
+        EntityNode
+            The created entity node with embeddings.
+        """
+        labels = [entity_type] if entity_type and entity_type != 'Entity' else []
+
+        node = EntityNode(
+            name=name,
+            labels=labels,
+            summary=summary,
+            group_id=group_id,
+            attributes=attributes or {},
+            created_at=utc_now(),
+        )
+
+        await node.generate_name_embedding(self.embedder)
+        if summary:
+            await node.generate_summary_embedding(self.embedder)
+
+        await node.save(self.driver)
+        return node
+
+    async def get_entity(self, uuid: str) -> EntityNode:
+        """
+        Retrieve an entity node by UUID.
+
+        Parameters
+        ----------
+        uuid : str
+            The UUID of the entity to retrieve.
+
+        Returns
+        -------
+        EntityNode
+            The entity node.
+
+        Raises
+        ------
+        NodeNotFoundError
+            If no entity with the given UUID exists.
+        """
+        return await EntityNode.get_by_uuid(self.driver, uuid)
+
+    async def update_entity(
+        self,
+        uuid: str,
+        name: str | None = None,
+        summary: str | None = None,
+        entity_type: str | None = None,
+        attributes: dict | None = None,
+    ) -> EntityNode:
+        """
+        Update an existing entity node. Regenerates embeddings when name or summary changes.
+
+        Parameters
+        ----------
+        uuid : str
+            The UUID of the entity to update.
+        name : str | None, optional
+            New name for the entity. Triggers name embedding regeneration.
+        summary : str | None, optional
+            New summary for the entity. Triggers summary embedding regeneration.
+        entity_type : str | None, optional
+            New entity type/label.
+        attributes : dict | None, optional
+            Attributes to merge into existing attributes.
+
+        Returns
+        -------
+        EntityNode
+            The updated entity node.
+
+        Raises
+        ------
+        NodeNotFoundError
+            If no entity with the given UUID exists.
+        """
+        node = await EntityNode.get_by_uuid(self.driver, uuid)
+
+        if name is not None and name != node.name:
+            node.name = name
+            await node.generate_name_embedding(self.embedder)
+
+        if summary is not None and summary != node.summary:
+            node.summary = summary
+            if summary:
+                await node.generate_summary_embedding(self.embedder)
+            else:
+                node.summary_embedding = None
+
+        if entity_type is not None:
+            node.labels = [entity_type] if entity_type != 'Entity' else []
+
+        if attributes is not None:
+            node.attributes.update(attributes)
+
+        await node.save(self.driver)
+        return node
+
+    async def delete_entity(self, uuid: str) -> None:
+        """
+        Delete an entity node by UUID.
+
+        Parameters
+        ----------
+        uuid : str
+            The UUID of the entity to delete.
+
+        Raises
+        ------
+        NodeNotFoundError
+            If no entity with the given UUID exists.
+        """
+        node = await EntityNode.get_by_uuid(self.driver, uuid)
+        await node.delete(self.driver)
+
+    async def create_edge(
+        self,
+        source_node_uuid: str,
+        target_node_uuid: str,
+        name: str,
+        fact: str,
+        group_id: str,
+        valid_at: datetime | None = None,
+        invalid_at: datetime | None = None,
+        attributes: dict | None = None,
+    ) -> EntityEdge:
+        """
+        Create a new entity edge with auto-generated embedding.
+
+        Parameters
+        ----------
+        source_node_uuid : str
+            UUID of the source entity node.
+        target_node_uuid : str
+            UUID of the target entity node.
+        name : str
+            The name/type of the relationship.
+        fact : str
+            A fact statement describing the relationship.
+        group_id : str
+            The group ID for graph partitioning.
+        valid_at : datetime | None, optional
+            When the fact became true.
+        invalid_at : datetime | None, optional
+            When the fact stopped being true.
+        attributes : dict | None, optional
+            Additional attributes for the edge.
+
+        Returns
+        -------
+        EntityEdge
+            The created entity edge with embedding.
+        """
+        now = utc_now()
+
+        edge = EntityEdge(
+            source_node_uuid=source_node_uuid,
+            target_node_uuid=target_node_uuid,
+            name=name,
+            fact=fact,
+            group_id=group_id,
+            created_at=now,
+            valid_at=valid_at,
+            invalid_at=invalid_at,
+            attributes=attributes or {},
+        )
+
+        await edge.generate_embedding(self.embedder)
+        await edge.save(self.driver)
+        return edge
+
+    async def get_edge(self, uuid: str) -> EntityEdge:
+        """
+        Retrieve an entity edge by UUID.
+
+        Parameters
+        ----------
+        uuid : str
+            The UUID of the edge to retrieve.
+
+        Returns
+        -------
+        EntityEdge
+            The entity edge.
+
+        Raises
+        ------
+        EdgeNotFoundError
+            If no edge with the given UUID exists.
+        """
+        return await EntityEdge.get_by_uuid(self.driver, uuid)
+
+    async def update_edge(
+        self,
+        uuid: str,
+        name: str | None = None,
+        fact: str | None = None,
+        valid_at: datetime | None = None,
+        invalid_at: datetime | None = None,
+        attributes: dict | None = None,
+    ) -> EntityEdge:
+        """
+        Update an existing entity edge. Regenerates embedding when fact changes.
+
+        Parameters
+        ----------
+        uuid : str
+            The UUID of the edge to update.
+        name : str | None, optional
+            New name for the edge.
+        fact : str | None, optional
+            New fact statement. Triggers embedding regeneration.
+        valid_at : datetime | None, optional
+            New valid_at timestamp.
+        invalid_at : datetime | None, optional
+            New invalid_at timestamp.
+        attributes : dict | None, optional
+            Attributes to merge into existing attributes.
+
+        Returns
+        -------
+        EntityEdge
+            The updated entity edge.
+
+        Raises
+        ------
+        EdgeNotFoundError
+            If no edge with the given UUID exists.
+        """
+        edge = await EntityEdge.get_by_uuid(self.driver, uuid)
+
+        if name is not None:
+            edge.name = name
+
+        if fact is not None and fact != edge.fact:
+            edge.fact = fact
+            await edge.generate_embedding(self.embedder)
+
+        if valid_at is not None:
+            edge.valid_at = valid_at
+
+        if invalid_at is not None:
+            edge.invalid_at = invalid_at
+
+        if attributes is not None:
+            edge.attributes.update(attributes)
+
+        await edge.save(self.driver)
+        return edge
+
+    async def delete_edge(self, uuid: str) -> None:
+        """
+        Delete an entity edge by UUID.
+
+        Parameters
+        ----------
+        uuid : str
+            The UUID of the edge to delete.
+
+        Raises
+        ------
+        EdgeNotFoundError
+            If no edge with the given UUID exists.
+        """
+        edge = await EntityEdge.get_by_uuid(self.driver, uuid)
+        await edge.delete(self.driver)
+
+    async def get_episode(self, uuid: str) -> EpisodicNode:
+        """
+        Retrieve an episode by UUID.
+
+        Parameters
+        ----------
+        uuid : str
+            The UUID of the episode to retrieve.
+
+        Returns
+        -------
+        EpisodicNode
+            The episodic node.
+
+        Raises
+        ------
+        NodeNotFoundError
+            If no episode with the given UUID exists.
+        """
+        return await EpisodicNode.get_by_uuid(self.driver, uuid)
+
+    async def delete_episode(self, uuid: str) -> None:
+        """
+        Delete an episode by UUID. Alias for remove_episode.
+
+        Parameters
+        ----------
+        uuid : str
+            The UUID of the episode to delete.
+        """
+        await self.remove_episode(uuid)
+
+    async def get_entities_by_group_id(
+        self,
+        group_id: str,
+        limit: int | None = None,
+        uuid_cursor: str | None = None,
+    ) -> list[EntityNode]:
+        """
+        Retrieve entity nodes by group ID with pagination support.
+
+        Parameters
+        ----------
+        group_id : str
+            The group ID to filter by.
+        limit : int | None, optional
+            Maximum number of entities to return.
+        uuid_cursor : str | None, optional
+            UUID cursor for pagination.
+
+        Returns
+        -------
+        list[EntityNode]
+            List of entity nodes.
+        """
+        return await EntityNode.get_by_group_ids(
+            self.driver, [group_id], limit=limit, uuid_cursor=uuid_cursor
+        )
+
+    async def get_edges_by_group_id(
+        self,
+        group_id: str,
+        limit: int | None = None,
+        uuid_cursor: str | None = None,
+    ) -> list[EntityEdge]:
+        """
+        Retrieve entity edges by group ID with pagination support.
+
+        Parameters
+        ----------
+        group_id : str
+            The group ID to filter by.
+        limit : int | None, optional
+            Maximum number of edges to return.
+        uuid_cursor : str | None, optional
+            UUID cursor for pagination.
+
+        Returns
+        -------
+        list[EntityEdge]
+            List of entity edges.
+
+        Raises
+        ------
+        GroupsEdgesNotFoundError
+            If no edges found for the group.
+        """
+        return await EntityEdge.get_by_group_ids(
+            self.driver, [group_id], limit=limit, uuid_cursor=uuid_cursor
+        )
+
+    async def get_episodes_by_group_id(
+        self,
+        group_id: str,
+        limit: int | None = None,
+        uuid_cursor: str | None = None,
+    ) -> list[EpisodicNode]:
+        """
+        Retrieve episodes by group ID with pagination support.
+
+        Parameters
+        ----------
+        group_id : str
+            The group ID to filter by.
+        limit : int | None, optional
+            Maximum number of episodes to return.
+        uuid_cursor : str | None, optional
+            UUID cursor for pagination.
+
+        Returns
+        -------
+        list[EpisodicNode]
+            List of episodic nodes.
+        """
+        return await EpisodicNode.get_by_group_ids(
+            self.driver, [group_id], limit=limit, uuid_cursor=uuid_cursor
+        )
+
+    async def get_groups(self) -> list[str]:
+        """
+        Retrieve all distinct group IDs from the graph.
+
+        Returns
+        -------
+        list[str]
+            List of unique group IDs.
+        """
+        records, _, _ = await self.driver.execute_query(
+            """
+            MATCH (n)
+            WHERE n.group_id IS NOT NULL
+            RETURN DISTINCT n.group_id AS group_id
+            ORDER BY group_id
+            """,
+            routing_='r',
+        )
+        return [record['group_id'] for record in records]
+
+    async def delete_group(self, group_id: str, batch_size: int = 100) -> None:
+        """
+        Delete all nodes and edges belonging to a group.
+
+        WARNING: This is a destructive operation that cannot be undone.
+
+        Parameters
+        ----------
+        group_id : str
+            The group ID to delete.
+        batch_size : int, optional
+            Batch size for deletion. Defaults to 100.
+        """
+        await Node.delete_by_group_id(self.driver, group_id, batch_size)
