@@ -2054,6 +2054,12 @@ class Graphiti:
         """
         group_filter = 'WHERE n.group_id = $group_id' if group_id else ''
         edge_group_filter = 'WHERE r.group_id = $group_id' if group_id else ''
+        # For episode edge query, we need AND when group_id is set
+        episode_edge_filter = (
+            'WHERE r.group_id = $group_id AND r.episodes IS NOT NULL AND size(r.episodes) > 0'
+            if group_id else
+            'WHERE r.episodes IS NOT NULL AND size(r.episodes) > 0'
+        )
 
         # Count entity nodes
         node_result, _, _ = await self.driver.execute_query(
@@ -2083,8 +2089,7 @@ class Graphiti:
         episode_edge_result, _, _ = await self.driver.execute_query(
             f"""
             MATCH ()-[r:RELATES_TO]->()
-            {edge_group_filter}
-            WHERE r.episodes IS NOT NULL AND size(r.episodes) > 0
+            {episode_edge_filter}
             RETURN sum(size(r.episodes)) AS count
             """,
             group_id=group_id,
