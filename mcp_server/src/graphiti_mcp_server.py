@@ -34,7 +34,7 @@ from models.response_types import (
     SuccessResponse,
 )
 from services.factories import DatabaseDriverFactory, EmbedderFactory, LLMClientFactory
-from services.queue_service import QueueConfig, QueueService
+from services.queue_service import create_queue_backend
 from services.entity_type_service import EntityTypeService
 from utils.formatting import format_fact_result
 
@@ -1001,24 +1001,8 @@ async def initialize_server() -> ServerConfig:
     # Initialize services
     graphiti_service = GraphitiService(config, SEMAPHORE_LIMIT, entity_type_service)
 
-    # Get Redis URL from FalkorDB config for the queue service
-    # Build URL with password if present (FalkorDBProviderConfig has uri + password separately)
-    # Note: FalkorDB/Redis uses password-only auth (no username), syntax: redis://:password@host:port
-    redis_url = 'redis://localhost:6379'  # default
-    if config.database.provider == 'falkordb' and config.database.providers.falkordb:
-        falkor_cfg = config.database.providers.falkordb
-        from urllib.parse import urlparse
-        parsed = urlparse(falkor_cfg.uri)
-        # Only add password if not already in URI and password is configured
-        if falkor_cfg.password and not parsed.password:
-            host = parsed.hostname or 'localhost'
-            port = parsed.port or 6379
-            redis_url = f'redis://:{falkor_cfg.password}@{host}:{port}'
-        else:
-            redis_url = falkor_cfg.uri
-
-    queue_config = QueueConfig(redis_url=redis_url)
-    queue_service = QueueService(config=queue_config)
+    # Create queue backend using factory (auto-detects Redis from FalkorDB or uses In-Memory)
+    queue_service = create_queue_backend(config)
     await graphiti_service.initialize()
 
     # Set global client for backward compatibility

@@ -100,6 +100,17 @@ database:
       database: ${NEO4J_DATABASE:neo4j}
       use_parallel_runtime: ${USE_PARALLEL_RUNTIME:false}
 
+# Queue backend configuration for background episode processing
+# Backend selection:
+#   "auto" (default): Uses Redis if FalkorDB is configured, otherwise In-Memory
+#   "redis": Force Redis Streams (persistent, crash-resilient)
+#   "memory": Force In-Memory asyncio.Queue (no persistence, development/testing)
+queue:
+  backend: ${QUEUE_BACKEND:auto}
+  # redis_url: ${QUEUE_REDIS_URL:}  # Optional: Override Redis URL (auto-detected from FalkorDB)
+  # consumer_group: "graphiti_workers"
+  # shutdown_timeout: 30.0
+
 graphiti:
   group_id: ${GRAPHITI_GROUP_ID:main}
   episode_id_prefix: ${EPISODE_ID_PREFIX:}

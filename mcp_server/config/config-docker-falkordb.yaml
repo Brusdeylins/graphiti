@@ -68,13 +68,17 @@ embedder:
 
 database:
   provider: "falkordb"  # Using FalkorDB for this configuration
-  
+
   providers:
     falkordb:
       # Use environment variable if set, otherwise use Docker service hostname
       uri: ${FALKORDB_URI:redis://falkordb:6379}
       password: ${FALKORDB_PASSWORD:}
       database: ${FALKORDB_DATABASE:default_db}
+
+# Queue backend configuration (auto-detects Redis from FalkorDB)
+queue:
+  backend: ${QUEUE_BACKEND:auto}
 
 graphiti:
   group_id: ${GRAPHITI_GROUP_ID:main}

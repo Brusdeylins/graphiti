@@ -81,6 +81,10 @@ database:
       password: ${FALKORDB_PASSWORD:}
       database: ${FALKORDB_DATABASE:default_db}
 
+# Queue backend configuration (auto-detects Redis from FalkorDB)
+queue:
+  backend: ${QUEUE_BACKEND:auto}
+
 graphiti:
   group_id: ${GRAPHITI_GROUP_ID:main}
   episode_id_prefix: ${EPISODE_ID_PREFIX:}
