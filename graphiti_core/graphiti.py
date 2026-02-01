@@ -1658,8 +1658,29 @@ class Graphiti:
             else:
                 node.summary_embedding = None
 
+        # Handle label changes with explicit REMOVE/SET in database
         if entity_type is not None:
-            node.labels = [entity_type] if entity_type != 'Entity' else []
+            old_labels = node.labels or []
+            new_labels = [entity_type] if entity_type != 'Entity' else []
+
+            # Remove old labels (except Entity which is always present)
+            for old_label in old_labels:
+                if old_label and old_label != 'Entity':
+                    safe_label = old_label.replace('`', '')
+                    await self.driver.execute_query(
+                        f'MATCH (n:Entity {{uuid: $uuid}}) REMOVE n:`{safe_label}`',
+                        uuid=uuid,
+                    )
+
+            # Add new label
+            if new_labels:
+                safe_label = new_labels[0].replace('`', '')
+                await self.driver.execute_query(
+                    f'MATCH (n:Entity {{uuid: $uuid}}) SET n:`{safe_label}`',
+                    uuid=uuid,
+                )
+
+            node.labels = new_labels
 
         if attributes is not None:
             node.attributes.update(attributes)
@@ -2016,3 +2037,126 @@ class Graphiti:
             Batch size for deletion. Defaults to 100.
         """
         await Node.delete_by_group_id(self.driver, group_id, batch_size)
+
+    async def get_graph_stats(self, group_id: str | None = None) -> dict:
+        """
+        Get statistics about the graph (node, edge, episode counts).
+
+        Parameters
+        ----------
+        group_id : str | None, optional
+            Filter by group ID. If None, counts all.
+
+        Returns
+        -------
+        dict
+            Dictionary with node_count, edge_count, episode_count, episode_edge_count.
+        """
+        group_filter = 'WHERE n.group_id = $group_id' if group_id else ''
+        edge_group_filter = 'WHERE r.group_id = $group_id' if group_id else ''
+
+        # Count entity nodes
+        node_result, _, _ = await self.driver.execute_query(
+            f'MATCH (n:Entity) {group_filter} RETURN count(n) AS count',
+            group_id=group_id,
+            routing_='r',
+        )
+        node_count = node_result[0]['count'] if node_result else 0
+
+        # Count edges
+        edge_result, _, _ = await self.driver.execute_query(
+            f'MATCH ()-[r:RELATES_TO]->() {edge_group_filter} RETURN count(r) AS count',
+            group_id=group_id,
+            routing_='r',
+        )
+        edge_count = edge_result[0]['count'] if edge_result else 0
+
+        # Count episodes
+        episode_result, _, _ = await self.driver.execute_query(
+            f'MATCH (n:Episodic) {group_filter} RETURN count(n) AS count',
+            group_id=group_id,
+            routing_='r',
+        )
+        episode_count = episode_result[0]['count'] if episode_result else 0
+
+        # Count edge-episode references
+        episode_edge_result, _, _ = await self.driver.execute_query(
+            f"""
+            MATCH ()-[r:RELATES_TO]->()
+            {edge_group_filter}
+            WHERE r.episodes IS NOT NULL AND size(r.episodes) > 0
+            RETURN sum(size(r.episodes)) AS count
+            """,
+            group_id=group_id,
+            routing_='r',
+        )
+        episode_edge_count = episode_edge_result[0]['count'] if episode_edge_result else 0
+
+        return {
+            'node_count': node_count,
+            'edge_count': edge_count,
+            'episode_count': episode_count,
+            'episode_edge_count': episode_edge_count or 0,
+        }
+
+    async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
+        """
+        Rename a group by updating all group_id properties.
+
+        Parameters
+        ----------
+        old_group_id : str
+            The current group ID.
+        new_group_id : str
+            The new group ID.
+        """
+        # Update entity nodes
+        await self.driver.execute_query(
+            """
+            MATCH (n:Entity {group_id: $old_group_id})
+            SET n.group_id = $new_group_id
+            """,
+            old_group_id=old_group_id,
+            new_group_id=new_group_id,
+        )
+
+        # Update episodic nodes
+        await self.driver.execute_query(
+            """
+            MATCH (n:Episodic {group_id: $old_group_id})
+            SET n.group_id = $new_group_id
+            """,
+            old_group_id=old_group_id,
+            new_group_id=new_group_id,
+        )
+
+        # Update edges
+        await self.driver.execute_query(
+            """
+            MATCH ()-[r:RELATES_TO {group_id: $old_group_id}]->()
+            SET r.group_id = $new_group_id
+            """,
+            old_group_id=old_group_id,
+            new_group_id=new_group_id,
+        )
+
+    async def execute_query(self, query: str, **params) -> tuple[list[dict], list[str], dict]:
+        """
+        Execute a raw Cypher query against the graph.
+
+        This is a pass-through to the driver for advanced use cases.
+        Use with caution.
+
+        Parameters
+        ----------
+        query : str
+            The Cypher query to execute.
+        **params
+            Query parameters.
+
+        Returns
+        -------
+        tuple[list[dict], list[str], dict]
+            Records, column names, and metadata.
+        """
+        return await self.driver.execute_query(query, **params)
