@@ -2038,6 +2038,36 @@ class Graphiti:
         """
         await Node.delete_by_group_id(self.driver, group_id, batch_size)
 
+    async def copy_group(self, source_group_id: str, target_group_id: str) -> None:
+        """
+        Copy all nodes and edges from one group to another.
+
+        Creates a complete copy of the graph with new UUIDs for all entities.
+
+        Parameters
+        ----------
+        source_group_id : str
+            The source group ID to copy from.
+        target_group_id : str
+            The target group ID to copy to (must not exist or will be overwritten).
+        """
+        await self.driver.copy_group(source_group_id, target_group_id)
+
+    async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
+        """
+        Rename a group to a new name.
+
+        WARNING: This is a destructive operation - the old group will no longer exist.
+
+        Parameters
+        ----------
+        old_group_id : str
+            The current group ID.
+        new_group_id : str
+            The new group ID.
+        """
+        await self.driver.rename_group(old_group_id, new_group_id)
+
     async def get_graph_stats(self, group_id: str | None = None) -> dict:
         """
         Get statistics about the graph (node, edge, episode counts).
@@ -2103,47 +2133,6 @@ class Graphiti:
             'episode_count': episode_count,
             'episode_edge_count': episode_edge_count or 0,
         }
-
-    async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
-        """
-        Rename a group by updating all group_id properties.
-
-        Parameters
-        ----------
-        old_group_id : str
-            The current group ID.
-        new_group_id : str
-            The new group ID.
-        """
-        # Update entity nodes
-        await self.driver.execute_query(
-            """
-            MATCH (n:Entity {group_id: $old_group_id})
-            SET n.group_id = $new_group_id
-            """,
-            old_group_id=old_group_id,
-            new_group_id=new_group_id,
-        )
-
-        # Update episodic nodes
-        await self.driver.execute_query(
-            """
-            MATCH (n:Episodic {group_id: $old_group_id})
-            SET n.group_id = $new_group_id
-            """,
-            old_group_id=old_group_id,
-            new_group_id=new_group_id,
-        )
-
-        # Update edges
-        await self.driver.execute_query(
-            """
-            MATCH ()-[r:RELATES_TO {group_id: $old_group_id}]->()
-            SET r.group_id = $new_group_id
-            """,
-            old_group_id=old_group_id,
-            new_group_id=new_group_id,
-        )
 
     async def execute_query(self, query: str, **params) -> tuple[list[dict], list[str], dict]:
         """

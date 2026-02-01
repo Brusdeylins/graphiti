@@ -354,3 +354,37 @@ class FalkorDriver(GraphDriver):
             return ''
 
         return sanitized_query
+
+    async def copy_group(self, source_group_id: str, target_group_id: str) -> None:
+        """
+        Copy a FalkorDB graph to a new name using GRAPH.COPY Redis command.
+
+        In FalkorDB, each group_id is a separate Redis graph key.
+        """
+        if source_group_id == target_group_id:
+            raise ValueError('Source and target group IDs must be different')
+
+        # Access the underlying Redis connection from FalkorDB client
+        redis_conn = self.client.connection
+        await redis_conn.execute_command('GRAPH.COPY', source_group_id, target_group_id)
+        logger.info(f'Copied graph {source_group_id} to {target_group_id}')
+
+    async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
+        """
+        Rename a FalkorDB graph by copying to new name and deleting the old one.
+
+        In FalkorDB, each group_id is a separate Redis graph key.
+        Uses GRAPH.COPY + GRAPH.DELETE since there's no GRAPH.RENAME command.
+        """
+        if old_group_id == new_group_id:
+            raise ValueError('Old and new group IDs must be different')
+
+        redis_conn = self.client.connection
+
+        # Copy to new name
+        await redis_conn.execute_command('GRAPH.COPY', old_group_id, new_group_id)
+        logger.info(f'Copied graph {old_group_id} to {new_group_id}')
+
+        # Delete old graph
+        await redis_conn.execute_command('GRAPH.DELETE', old_group_id)
+        logger.info(f'Deleted old graph {old_group_id}')

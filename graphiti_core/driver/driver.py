@@ -122,3 +122,29 @@ class GraphDriver(ABC):
         Only implemented by providers that need custom fulltext query building.
         """
         raise NotImplementedError(f'build_fulltext_query not implemented for {self.provider}')
+
+    async def copy_group(self, source_group_id: str, target_group_id: str) -> None:
+        """
+        Copy all nodes and edges from one group to another.
+
+        Parameters
+        ----------
+        source_group_id : str
+            The source group ID to copy from.
+        target_group_id : str
+            The target group ID to copy to.
+        """
+        raise NotImplementedError(f'copy_group not implemented for {self.provider}')
+
+    async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
+        """
+        Rename a group by copying to new name and deleting the old one.
+
+        Parameters
+        ----------
+        old_group_id : str
+            The current group ID.
+        new_group_id : str
+            The new group ID.
+        """
+        raise NotImplementedError(f'rename_group not implemented for {self.provider}')
