@@ -308,16 +308,16 @@ graphiti:
           description: "Status: draft, approved, implemented, tested"
 
     - name: "BusinessRule"
-      description: "Business constraint, policy, or decision logic. Edges: →Organization (enterprise_policy_of), →Project (applies_in), →Requirement (implements, derived_from), →Domain (belongs_to), →UseCase (enforced_in), →Component (enforced_by)."
+      description: "Business constraint, policy, or decision logic. Edges: →Condition (evaluates, triggered_by), →Organization (enterprise_policy_of), →Project (applies_in), →Requirement (implements, derived_from), →Domain (belongs_to), →UseCase (enforced_in), →Component (enforced_by)."
       fields:
         - name: "type"
           type: "str"
           required: false
           description: "Type: constraint, computation, inference, action_enabler, policy"
-        - name: "expression"
+        - name: "action"
           type: "str"
           required: false
-          description: "Rule logic: 'IF condition THEN action'"
+          description: "Action to execute when condition is met"
         - name: "enforcement"
           type: "str"
           required: false
@@ -326,6 +326,18 @@ graphiti:
           type: "str"
           required: false
           description: "Scope: enterprise, project, domain, process"
+
+    - name: "Condition"
+      description: "Logical condition for boolean expressions. Build complex logic via edges: requires_all (AND), requires_any (OR), negates (NOT). Leaf conditions have no children. Edges: →Condition (requires_all, requires_any, negates), →BusinessRule (triggers, part_of), →Fact (evaluates), →Event (triggered_by)."
+      fields:
+        - name: "operator"
+          type: "str"
+          required: false
+          description: "Operator: and, or, not, leaf"
+        - name: "expression"
+          type: "str"
+          required: false
+          description: "Human-readable expression for documentation (e.g., 'A & (B | C)')"
 
     # === Document/Content Entities (Dublin Core) ===
     - name: "Document"
