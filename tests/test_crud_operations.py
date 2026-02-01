@@ -14,11 +14,9 @@ import os
 import pytest
 import pytest_asyncio
 
-# Set test environment
-os.environ.setdefault('OPENAI_API_KEY', os.environ.get('OPENAI_API_KEY', ''))
-
 from graphiti_core import Graphiti
 from graphiti_core.driver.falkordb_driver import FalkorDriver
+from graphiti_core.embedder import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.errors import NodeNotFoundError, EdgeNotFoundError
 
 
@@ -26,13 +24,15 @@ from graphiti_core.errors import NodeNotFoundError, EdgeNotFoundError
 FALKORDB_HOST = os.environ.get('FALKORDB_HOST', 'localhost')
 FALKORDB_PORT = int(os.environ.get('FALKORDB_PORT', '6379'))
 FALKORDB_PASSWORD = os.environ.get('FALKORDB_PASSWORD', 'password4FalkorDB!')
+OPENAI_API_URL = os.environ.get('OPENAI_API_URL', 'https://openai.brusdeylins.info/v1')
+EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'nomic-embed-text:latest')
 TEST_GROUP_ID = 'crud_test'
 
 # Store UUIDs between tests
 _test_data = {}
 
 
-@pytest_asyncio.fixture(scope='module')
+@pytest_asyncio.fixture(loop_scope='module', scope='module')
 async def graphiti_client():
     """Create Graphiti client for tests."""
     driver = FalkorDriver(
@@ -42,7 +42,16 @@ async def graphiti_client():
         database=TEST_GROUP_ID,
     )
 
-    client = Graphiti(graph_driver=driver)
+    # Configure embedder with custom endpoint
+    api_key = os.environ.get('OPENAI_API_KEY', 'not-needed')
+    embedder_config = OpenAIEmbedderConfig(
+        api_key=api_key,
+        base_url=OPENAI_API_URL,
+        embedding_model=EMBEDDING_MODEL,
+    )
+    embedder = OpenAIEmbedder(embedder_config)
+
+    client = Graphiti(graph_driver=driver, embedder=embedder)
 
     # Build indices
     await client.build_indices_and_constraints()
