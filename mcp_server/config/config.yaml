@@ -634,7 +634,7 @@ graphiti:
           description: "Price or price range with currency"
 
     - name: "Item"
-      description: "Personal possession or owned instance of a product (e.g., 'my MacBook Pro', 'my Toyota Corolla'). Use Product for generic products. Edges: →Person (owned_by, used_by), →Organization (owned_by), →Location (located_at), →Product (instance_of)."
+      description: "Personal possession or owned INSTANCE of a product - a specific object belonging to someone (e.g., 'my MacBook Pro', 'Peters Auto'). NEVER use for generic products, toys, or objects - use Product instead. Edges: →Person (owned_by, used_by), →Organization (owned_by), →Location (located_at), →Product (instance_of)."
       fields:
         - name: "type"
           type: "str"
