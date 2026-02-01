@@ -123,6 +123,32 @@ class TestEntityCRUD:
         assert entity.attributes.get('role') == 'senior_tester'
         assert entity.attributes.get('level') == '5'
 
+    async def test_update_entity_type(self, graphiti_client: Graphiti):
+        """Test updating entity type (labels should change in database)."""
+        # First check current type is Person
+        entity = await graphiti_client.get_entity(_test_data['entity_uuid'])
+        assert 'Person' in entity.labels
+
+        # Change to Organization
+        entity = await graphiti_client.update_entity(
+            uuid=_test_data['entity_uuid'],
+            entity_type='Organization',
+        )
+
+        assert 'Organization' in entity.labels
+        assert 'Person' not in entity.labels
+
+        # Verify in database by fetching again
+        entity = await graphiti_client.get_entity(_test_data['entity_uuid'])
+        assert 'Organization' in entity.labels
+        assert 'Person' not in entity.labels
+
+        # Change back to Person for other tests
+        await graphiti_client.update_entity(
+            uuid=_test_data['entity_uuid'],
+            entity_type='Person',
+        )
+
     async def test_get_entities_by_group_id(self, graphiti_client: Graphiti):
         """Test listing entities by group ID."""
         entities = await graphiti_client.get_entities_by_group_id(TEST_GROUP_ID)
@@ -146,7 +172,7 @@ class TestEdgeCRUD:
         _test_data['target_entity_uuid'] = entity.uuid
 
     async def test_create_edge(self, graphiti_client: Graphiti):
-        """Test creating an edge."""
+        """Test creating an edge with auto-created episode."""
         edge = await graphiti_client.create_edge(
             source_node_uuid=_test_data['entity_uuid'],
             target_node_uuid=_test_data['target_entity_uuid'],
@@ -163,7 +189,21 @@ class TestEdgeCRUD:
         assert edge.target_node_uuid == _test_data['target_entity_uuid']
         assert edge.fact_embedding is not None
 
+        # Edge should have an episode (auto-created)
+        assert edge.episodes is not None
+        assert len(edge.episodes) == 1
+
         _test_data['edge_uuid'] = edge.uuid
+        _test_data['episode_uuid'] = edge.episodes[0]
+
+    async def test_edge_episode_exists(self, graphiti_client: Graphiti):
+        """Test that the auto-created episode exists and has correct content."""
+        episode = await graphiti_client.get_episode(_test_data['episode_uuid'])
+
+        assert episode is not None
+        assert episode.content == 'Updated Person works on Test Project'
+        assert episode.source_description == 'Manual entry'
+        assert _test_data['edge_uuid'] in episode.entity_edges
 
     async def test_get_edge(self, graphiti_client: Graphiti):
         """Test retrieving an edge."""
@@ -210,6 +250,30 @@ class TestGroupOperations:
 
         assert isinstance(groups, list)
         # Test group should be in list (if data exists)
+
+    async def test_get_graph_stats(self, graphiti_client: Graphiti):
+        """Test getting graph statistics."""
+        stats = await graphiti_client.get_graph_stats(group_id=TEST_GROUP_ID)
+
+        assert 'node_count' in stats
+        assert 'edge_count' in stats
+        assert 'episode_count' in stats
+        assert 'episode_edge_count' in stats
+
+        # We should have at least 2 entities (Person, Project), 1 edge, 1 episode
+        assert stats['node_count'] >= 2
+        assert stats['edge_count'] >= 1
+        assert stats['episode_count'] >= 1
+
+    async def test_execute_query(self, graphiti_client: Graphiti):
+        """Test executing a raw Cypher query."""
+        result, _, _ = await graphiti_client.execute_query(
+            'MATCH (n:Entity {group_id: $group_id}) RETURN count(n) AS count',
+            group_id=TEST_GROUP_ID,
+        )
+
+        assert len(result) == 1
+        assert result[0]['count'] >= 2
 
 
 @pytest.mark.asyncio(loop_scope='module')
