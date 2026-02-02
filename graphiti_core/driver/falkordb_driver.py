@@ -125,6 +125,7 @@ class FalkorDriver(GraphDriver):
         password: str | None = None,
         falkor_db: FalkorDB | None = None,
         database: str = 'default_db',
+        _skip_index_init: bool = False,
     ):
         """
         Initialize the FalkorDB driver.
@@ -140,6 +141,7 @@ class FalkorDriver(GraphDriver):
         password (str | None): The password for authentication (if required).
         falkor_db (FalkorDB | None): An existing FalkorDB instance to use instead of creating a new one.
         database (str): The name of the database to connect to. Defaults to 'default_db'.
+        _skip_index_init (bool): Internal flag to skip index initialization (used by clone()).
         """
         super().__init__()
         self._database = database
@@ -149,15 +151,16 @@ class FalkorDriver(GraphDriver):
         else:
             self.client = FalkorDB(host=host, port=port, username=username, password=password)
 
-        # Schedule the indices and constraints to be built
-        try:
-            # Try to get the current event loop
-            loop = asyncio.get_running_loop()
-            # Schedule the build_indices_and_constraints to run
-            loop.create_task(self.build_indices_and_constraints())
-        except RuntimeError:
-            # No event loop running, this will be handled later
-            pass
+        # Schedule the indices and constraints to be built (unless skipped for cloned drivers)
+        if not _skip_index_init:
+            try:
+                # Try to get the current event loop
+                loop = asyncio.get_running_loop()
+                # Schedule the build_indices_and_constraints to run
+                loop.create_task(self.build_indices_and_constraints())
+            except RuntimeError:
+                # No event loop running, this will be handled later
+                pass
 
     def _get_graph(self, graph_name: str | None) -> FalkorGraph:
         # FalkorDB requires a non-None database name for multi-tenant graphs; the default is "default_db"
@@ -253,14 +256,18 @@ class FalkorDriver(GraphDriver):
         """
         Returns a shallow copy of this driver with a different default database.
         Reuses the same connection (e.g. FalkorDB, Neo4j).
+
+        NOTE: _skip_index_init=True prevents auto-creation of graphs when cloning.
+        FalkorDB's select_graph() auto-creates non-existent graphs, which would
+        recreate a graph we're about to delete.
         """
         if database == self._database:
             cloned = self
         elif database == self.default_group_id:
-            cloned = FalkorDriver(falkor_db=self.client)
+            cloned = FalkorDriver(falkor_db=self.client, _skip_index_init=True)
         else:
             # Create a new instance of FalkorDriver with the same connection but a different database
-            cloned = FalkorDriver(falkor_db=self.client, database=database)
+            cloned = FalkorDriver(falkor_db=self.client, database=database, _skip_index_init=True)
 
         return cloned
 
