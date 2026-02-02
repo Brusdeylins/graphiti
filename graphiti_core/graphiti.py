@@ -2005,23 +2005,17 @@ class Graphiti:
 
     async def get_groups(self) -> list[str]:
         """
-        Retrieve all distinct group IDs from the graph.
+        Retrieve all available groups/databases.
+
+        For Neo4j: Returns distinct group_ids from nodes.
+        For FalkorDB: Returns all graph names (each group is a separate graph).
 
         Returns
         -------
         list[str]
-            List of unique group IDs.
+            List of group/database names.
         """
-        records, _, _ = await self.driver.execute_query(
-            """
-            MATCH (n)
-            WHERE n.group_id IS NOT NULL
-            RETURN DISTINCT n.group_id AS group_id
-            ORDER BY group_id
-            """,
-            routing_='r',
-        )
-        return [record['group_id'] for record in records]
+        return await self.driver.list_groups()
 
     async def delete_group(self, group_id: str, batch_size: int = 100) -> None:
         """
