@@ -214,6 +214,27 @@ class InMemoryBackend(QueueBackend):
         queue = self._queues.get(group_id)
         return queue.qsize() if queue else 0
 
+    async def get_all_pending_async(self) -> tuple[int, int, list[dict]]:
+        """Get total pending count, active workers, and per-group breakdown."""
+        total_pending = 0
+        currently_processing = 0
+        groups_info = []
+
+        for group_id, queue in self._queues.items():
+            pending = queue.qsize()
+            total_pending += pending
+            is_running = self._worker_running.get(group_id, False)
+            if is_running:
+                currently_processing += 1
+            if pending > 0 or is_running:
+                groups_info.append({
+                    'group_id': group_id,
+                    'pending': pending,
+                    'processing': is_running,
+                })
+
+        return total_pending, currently_processing, groups_info
+
     def is_worker_running(self, group_id: str) -> bool:
         """Check if a worker is running for a group_id."""
         return self._worker_running.get(group_id, False)

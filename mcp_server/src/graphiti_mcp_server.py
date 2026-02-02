@@ -883,17 +883,24 @@ async def queue_status(request) -> JSONResponse:
         })
 
     try:
-        # Get status from queue backend
-        # Note: get_queue_size returns approximate count, is_worker_running returns bool
+        # Use async method if available (Redis backend)
+        if hasattr(queue_service, 'get_all_pending_async'):
+            total_pending, currently_processing, groups = await queue_service.get_all_pending_async()
+            return JSONResponse({
+                'total_pending': total_pending,
+                'currently_processing': currently_processing,
+                'groups': groups,
+            })
+
+        # Fallback for memory backend
         total_pending = 0
         currently_processing = 0
 
-        # Check all known workers
         if hasattr(queue_service, '_worker_running'):
             for group_id, running in queue_service._worker_running.items():
                 if running:
                     currently_processing += 1
-                    total_pending += queue_service.get_queue_size(group_id)
+                total_pending += queue_service.get_queue_size(group_id)
 
         return JSONResponse({
             'total_pending': total_pending,

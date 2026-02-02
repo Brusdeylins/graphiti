@@ -400,8 +400,64 @@ class RedisStreamsBackend(QueueBackend):
         logger.info('Redis Streams backend shutdown complete')
 
     def get_queue_size(self, group_id: str) -> int:
-        """Get pending message count (approximate - requires async call for accuracy)."""
+        """Get pending message count (approximate - requires async call for accuracy).
+
+        Note: This sync method returns 0. Use get_queue_size_async for actual count.
+        """
         return 0
+
+    async def get_queue_size_async(self, group_id: str) -> int:
+        """Get pending message count from Redis Stream."""
+        if self._redis is None:
+            return 0
+        try:
+            stream_key = f'graphiti:queue:{group_id}'
+            length = await self._redis.xlen(stream_key)
+            return length
+        except Exception as e:
+            logger.debug(f'Error getting queue size for {group_id}: {e}')
+            return 0
+
+    async def get_all_pending_async(self) -> tuple[int, int, list[dict]]:
+        """Get total pending count, active workers, and per-group breakdown.
+
+        Returns:
+            (total_pending, currently_processing, groups_info)
+        """
+        if self._redis is None:
+            return 0, 0, []
+
+        total_pending = 0
+        currently_processing = 0
+        groups_info = []
+
+        try:
+            # Find all queue streams
+            keys = await self._redis.keys('graphiti:queue:*')
+            for key in keys:
+                if isinstance(key, bytes):
+                    key = key.decode('utf-8')
+                group_id = key.replace('graphiti:queue:', '')
+
+                # Get stream length
+                length = await self._redis.xlen(key)
+                total_pending += length
+
+                # Check if worker is running
+                is_running = self._worker_running.get(group_id, False)
+                if is_running:
+                    currently_processing += 1
+
+                if length > 0 or is_running:
+                    groups_info.append({
+                        'group_id': group_id,
+                        'pending': length,
+                        'processing': is_running,
+                    })
+        except Exception as e:
+            logger.error(f'Error getting all pending: {e}')
+
+        return total_pending, currently_processing, groups_info
 
     def is_worker_running(self, group_id: str) -> bool:
         """Check if a worker is running for a group_id."""
