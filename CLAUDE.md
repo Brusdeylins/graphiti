@@ -14,6 +14,41 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Background:** On 2026-01-25, valuable episodes were lost due to an autonomous reset. This must NEVER happen again.
 
+## Git Workflow: NEVER Commit to local/combined!
+
+**WICHTIG:** `local/combined` ist NUR für Merges, NIEMALS für direkte Commits!
+
+### Workflow:
+1. **Neues Feature/Fix:** Erstelle oder nutze existierenden Feature-Branch
+   ```bash
+   git checkout -b feature/my-feature
+   # ODER
+   git checkout feature/existing-branch
+   ```
+
+2. **Commit auf Feature-Branch:**
+   ```bash
+   git add <files>
+   git commit -m "Beschreibung"
+   ```
+
+3. **Merge in combined:**
+   ```bash
+   git checkout local/combined
+   git merge feature/my-feature --no-edit
+   ```
+
+4. **Nach Test:** PR aus Feature-Branch erstellen
+
+### Existierende Feature-Branches:
+- `feature/graphiti-crud` - CRUD Operationen, FalkorDB Driver Fixes
+- `feature/queue-abstraction` - Queue Service, Redis Streams
+- `feature/entity-fields` - Entity Type Felder
+- `feature/local-build-helpers` - Build Scripts
+
+### Ausnahme:
+- **graphiti-ui Repo:** Dort kann direkt auf `main` committed werden
+
 ## Fork Information
 
 This is a fork of [getzep/graphiti](https://github.com/getzep/graphiti) with additional features:
