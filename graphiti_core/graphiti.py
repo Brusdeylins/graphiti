@@ -2017,20 +2017,21 @@ class Graphiti:
         """
         return await self.driver.list_groups()
 
-    async def delete_group(self, group_id: str, batch_size: int = 100) -> None:
+    async def delete_group(self, group_id: str) -> None:
         """
         Delete all nodes and edges belonging to a group.
 
         WARNING: This is a destructive operation that cannot be undone.
 
+        For FalkorDB: Deletes the entire Redis graph key.
+        For Neo4j/Kuzu/Neptune: Deletes all nodes/edges with this group_id.
+
         Parameters
         ----------
         group_id : str
             The group ID to delete.
-        batch_size : int, optional
-            Batch size for deletion. Defaults to 100.
         """
-        await Node.delete_by_group_id(self.driver, group_id, batch_size)
+        await self.driver.delete_group(group_id)
 
     async def copy_group(self, source_group_id: str, target_group_id: str) -> None:
         """

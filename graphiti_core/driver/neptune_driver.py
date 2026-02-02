@@ -414,6 +414,25 @@ class NeptuneDriver(GraphDriver):
         )
         return [record['group_id'] for record in records]
 
+    async def delete_group(self, group_id: str) -> None:
+        """
+        Delete all nodes and edges belonging to a group.
+
+        In Neptune, group_id is a property on nodes and relationships.
+        This deletes all data with the specified group_id.
+        """
+        # Delete all nodes with this group_id (DETACH DELETE removes relationships too)
+        await self.execute_query(
+            """
+            MATCH (n)
+            WHERE n.group_id = $group_id
+            DETACH DELETE n
+            """,
+            group_id=group_id,
+        )
+
+        logger.info(f'Deleted group {group_id}')
+
 
 class NeptuneDriverSession(GraphDriverSession):
     provider = GraphProvider.NEPTUNE

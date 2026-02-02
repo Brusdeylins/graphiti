@@ -162,3 +162,17 @@ class GraphDriver(ABC):
             List of group/database names.
         """
         raise NotImplementedError(f'list_groups not implemented for {self.provider}')
+
+    async def delete_group(self, group_id: str) -> None:
+        """
+        Delete an entire group/graph.
+
+        For Neo4j/Kuzu/Neptune: Deletes all nodes and edges with this group_id.
+        For FalkorDB: Deletes the entire Redis graph key.
+
+        Parameters
+        ----------
+        group_id : str
+            The group ID to delete.
+        """
+        raise NotImplementedError(f'delete_group not implemented for {self.provider}')
