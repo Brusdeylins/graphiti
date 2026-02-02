@@ -598,7 +598,7 @@ graphiti:
 
     # === Products & Items ===
     - name: "Product"
-      description: "Tradeable, reviewable, or usable product - physical, digital, or financial (tools, vehicles, software, financial instruments, appliances). Edges: →Organization (manufacturer, issuer, vendor), →Person (owner, reviewer), →Location (available_at), →Product (component_of, alternative_to, accessory_for), →Document (manual, review, specification)."
+      description: "Anything manufactured, purchased, owned, or collected - physical objects (tools, vehicles, appliances, toys, game pieces, furniture), digital goods (software, media), or financial instruments (stocks, bonds, ETFs). If it has a brand, model, price, or can be bought/sold, use Product. Edges: →Organization (manufacturer, issuer, vendor), →Person (owner, reviewer), →Location (available_at), →Product (component_of, alternative_to, accessory_for), →Document (manual, review, specification)."
       fields:
         - name: "type"
           type: "str"
