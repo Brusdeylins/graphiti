@@ -83,6 +83,12 @@ class ServerConfig(BaseModel):
     host: str = Field(default='0.0.0.0', description='Server host')
     port: int = Field(default=8000, description='Server port')
 
+    # Data directory for persistent storage (entity_types.json)
+    data_dir: str = Field(
+        default='/app/data',
+        description='Directory for persistent data storage (e.g., entity_types.json)',
+    )
+
     # Transport security settings (for HTTP transport)
     allowed_hosts: list[str] | None = Field(
         default=None,

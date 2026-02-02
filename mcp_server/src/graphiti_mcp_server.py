@@ -908,6 +908,141 @@ async def queue_status(request) -> JSONResponse:
         })
 
 
+# =============================================================================
+# HTTP Endpoints for Entity Types (DB-neutral, file-based)
+# =============================================================================
+
+
+@mcp.custom_route('/entity-types', methods=['GET'])
+async def http_get_entity_types(request) -> JSONResponse:
+    """List all entity types."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=500)
+
+    try:
+        entity_types = await entity_type_service.get_all()
+        return JSONResponse([et.to_dict() for et in entity_types])
+    except Exception as e:
+        logger.error(f'Error getting entity types: {e}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types', methods=['POST'])
+async def http_create_entity_type(request) -> JSONResponse:
+    """Create a new entity type."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=500)
+
+    try:
+        data = await request.json()
+        name = data.get('name')
+        description = data.get('description')
+        fields = data.get('fields', [])
+
+        if not name or not description:
+            return JSONResponse(
+                {'error': 'name and description are required'},
+                status_code=400,
+            )
+
+        entity_type = await entity_type_service.create(
+            name=name,
+            description=description,
+            fields=fields,
+        )
+        return JSONResponse(entity_type.to_dict(), status_code=201)
+    except ValueError as e:
+        return JSONResponse({'error': str(e)}, status_code=409)
+    except Exception as e:
+        logger.error(f'Error creating entity type: {e}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types/reset', methods=['POST'])
+async def http_reset_entity_types(request) -> JSONResponse:
+    """Reset entity types to config defaults."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=500)
+
+    try:
+        count = await entity_type_service.reset_to_defaults()
+        return JSONResponse({'message': f'Reset {count} entity types', 'count': count})
+    except RuntimeError as e:
+        return JSONResponse({'error': str(e)}, status_code=500)
+    except Exception as e:
+        logger.error(f'Error resetting entity types: {e}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types/{name}', methods=['GET'])
+async def http_get_entity_type(request) -> JSONResponse:
+    """Get a specific entity type by name."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=500)
+
+    try:
+        name = request.path_params['name']
+        entity_type = await entity_type_service.get_by_name(name)
+        if not entity_type:
+            return JSONResponse({'error': f'Entity type "{name}" not found'}, status_code=404)
+        return JSONResponse(entity_type.to_dict())
+    except Exception as e:
+        logger.error(f'Error getting entity type: {e}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types/{name}', methods=['PUT'])
+async def http_update_entity_type(request) -> JSONResponse:
+    """Update an entity type."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=500)
+
+    try:
+        name = request.path_params['name']
+        data = await request.json()
+
+        entity_type = await entity_type_service.update(
+            name=name,
+            description=data.get('description'),
+            fields=data.get('fields'),
+        )
+        return JSONResponse(entity_type.to_dict())
+    except ValueError as e:
+        return JSONResponse({'error': str(e)}, status_code=404)
+    except Exception as e:
+        logger.error(f'Error updating entity type: {e}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/entity-types/{name}', methods=['DELETE'])
+async def http_delete_entity_type(request) -> JSONResponse:
+    """Delete an entity type."""
+    global entity_type_service
+
+    if entity_type_service is None:
+        return JSONResponse({'error': 'EntityTypeService not initialized'}, status_code=500)
+
+    try:
+        name = request.path_params['name']
+        success = await entity_type_service.delete(name)
+        if not success:
+            return JSONResponse({'error': f'Entity type "{name}" not found'}, status_code=404)
+        return JSONResponse({'message': f'Deleted {name}'})
+    except Exception as e:
+        logger.error(f'Error deleting entity type: {e}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
 async def initialize_server() -> ServerConfig:
     """Parse CLI arguments and initialize the Graphiti server configuration."""
     global config, graphiti_service, queue_service, entity_type_service, graphiti_client, semaphore
@@ -1032,15 +1167,9 @@ async def initialize_server() -> ServerConfig:
         await clear_data(client.driver)
         logger.info('All graphs destroyed')
 
-    # Initialize EntityTypeService first (for seeding from config and DB storage)
-    entity_type_service = EntityTypeService()
-    db_config = DatabaseDriverFactory.create_config(config.database)
-    await entity_type_service.initialize(
-        host=db_config.get('host', 'localhost'),
-        port=db_config.get('port', 6379),
-        password=db_config.get('password'),
-        config=config,
-    )
+    # Initialize EntityTypeService first (file-based storage)
+    entity_type_service = EntityTypeService(data_dir=Path(config.server.data_dir))
+    await entity_type_service.initialize(config=config)
 
     # Initialize services
     graphiti_service = GraphitiService(config, SEMAPHORE_LIMIT, entity_type_service)
