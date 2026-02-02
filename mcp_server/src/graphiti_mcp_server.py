@@ -34,7 +34,7 @@ from models.response_types import (
     SuccessResponse,
 )
 from services.factories import DatabaseDriverFactory, EmbedderFactory, LLMClientFactory
-from services.queue_service import create_queue_backend
+from services.queue_service import QueueBackend, create_queue_backend
 from services.entity_type_service import EntityTypeService
 from utils.formatting import format_fact_result
 
@@ -173,7 +173,7 @@ mcp = FastMCP(
 
 # Global services
 graphiti_service: Optional['GraphitiService'] = None
-queue_service: QueueService | None = None
+queue_service: QueueBackend | None = None
 entity_type_service: EntityTypeService | None = None
 
 # Global client for backward compatibility
