@@ -864,6 +864,50 @@ async def health_check(request) -> JSONResponse:
     return JSONResponse({'status': 'healthy', 'service': 'graphiti-mcp'})
 
 
+@mcp.custom_route('/queue/status', methods=['GET'])
+async def queue_status(request) -> JSONResponse:
+    """Get queue processing status for UI polling.
+
+    Returns:
+        - total_pending: Total messages waiting across all groups
+        - currently_processing: Number of active workers
+        - groups: Per-group breakdown (optional, if group_id param provided)
+    """
+    global queue_service
+
+    if queue_service is None:
+        return JSONResponse({
+            'total_pending': 0,
+            'currently_processing': 0,
+            'error': 'Queue service not initialized',
+        })
+
+    try:
+        # Get status from queue backend
+        # Note: get_queue_size returns approximate count, is_worker_running returns bool
+        total_pending = 0
+        currently_processing = 0
+
+        # Check all known workers
+        if hasattr(queue_service, '_worker_running'):
+            for group_id, running in queue_service._worker_running.items():
+                if running:
+                    currently_processing += 1
+                    total_pending += queue_service.get_queue_size(group_id)
+
+        return JSONResponse({
+            'total_pending': total_pending,
+            'currently_processing': currently_processing,
+        })
+    except Exception as e:
+        logger.error(f'Error getting queue status: {e}')
+        return JSONResponse({
+            'total_pending': 0,
+            'currently_processing': 0,
+            'error': str(e),
+        })
+
+
 async def initialize_server() -> ServerConfig:
     """Parse CLI arguments and initialize the Graphiti server configuration."""
     global config, graphiti_service, queue_service, entity_type_service, graphiti_client, semaphore
