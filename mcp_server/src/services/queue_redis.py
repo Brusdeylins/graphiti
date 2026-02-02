@@ -407,19 +407,25 @@ class RedisStreamsBackend(QueueBackend):
         return 0
 
     async def get_queue_size_async(self, group_id: str) -> int:
-        """Get pending message count from Redis Stream."""
+        """Get pending (unacknowledged) message count from Redis Stream."""
         if self._redis is None:
             return 0
         try:
             stream_key = f'graphiti:queue:{group_id}'
-            length = await self._redis.xlen(stream_key)
-            return length
+            # XPENDING returns [count, min_id, max_id, [[consumer, count], ...]]
+            pending_info = await self._redis.xpending(stream_key, self._config.consumer_group)
+            if pending_info and pending_info['pending']:
+                return pending_info['pending']
+            return 0
         except Exception as e:
             logger.debug(f'Error getting queue size for {group_id}: {e}')
             return 0
 
     async def get_all_pending_async(self) -> tuple[int, int, list[dict]]:
         """Get total pending count, active workers, and per-group breakdown.
+
+        Uses XPENDING to get actual unacknowledged message count (not XLEN which
+        counts all messages including acknowledged ones).
 
         Returns:
             (total_pending, currently_processing, groups_info)
@@ -439,19 +445,25 @@ class RedisStreamsBackend(QueueBackend):
                     key = key.decode('utf-8')
                 group_id = key.replace('graphiti:queue:', '')
 
-                # Get stream length
-                length = await self._redis.xlen(key)
-                total_pending += length
+                # Get pending (unacknowledged) count via XPENDING
+                try:
+                    pending_info = await self._redis.xpending(key, self._config.consumer_group)
+                    pending_count = pending_info['pending'] if pending_info else 0
+                except Exception:
+                    # Consumer group might not exist yet
+                    pending_count = await self._redis.xlen(key)
+
+                total_pending += pending_count
 
                 # Check if worker is running
                 is_running = self._worker_running.get(group_id, False)
                 if is_running:
                     currently_processing += 1
 
-                if length > 0 or is_running:
+                if pending_count > 0 or is_running:
                     groups_info.append({
                         'group_id': group_id,
-                        'pending': length,
+                        'pending': pending_count,
                         'processing': is_running,
                     })
         except Exception as e:
