@@ -239,3 +239,32 @@ class Neo4jDriver(GraphDriver):
             routing_='r',
         )
         return [record['group_id'] for record in records]
+
+    async def delete_group(self, group_id: str) -> None:
+        """
+        Delete all nodes and edges belonging to a group.
+
+        In Neo4j, group_id is a property on nodes and relationships.
+        This deletes all data with the specified group_id.
+        """
+        # Delete all relationships with this group_id first
+        await self.execute_query(
+            """
+            MATCH ()-[r]->()
+            WHERE r.group_id = $group_id
+            DELETE r
+            """,
+            group_id=group_id,
+        )
+
+        # Delete all nodes with this group_id
+        await self.execute_query(
+            """
+            MATCH (n)
+            WHERE n.group_id = $group_id
+            DETACH DELETE n
+            """,
+            group_id=group_id,
+        )
+
+        logger.info(f'Deleted group {group_id}')

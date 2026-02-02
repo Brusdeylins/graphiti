@@ -290,6 +290,55 @@ class KuzuDriver(GraphDriver):
         )
         return [record['group_id'] for record in records]
 
+    async def delete_group(self, group_id: str) -> None:
+        """
+        Delete all nodes belonging to a group.
+
+        In Kuzu, group_id is a property on nodes. This deletes all data
+        with the specified group_id.
+        """
+        # Delete Entity nodes
+        await self.execute_query(
+            """
+            MATCH (n:Entity)
+            WHERE n.group_id = $group_id
+            DELETE n
+            """,
+            group_id=group_id,
+        )
+
+        # Delete Episodic nodes
+        await self.execute_query(
+            """
+            MATCH (n:Episodic)
+            WHERE n.group_id = $group_id
+            DELETE n
+            """,
+            group_id=group_id,
+        )
+
+        # Delete RelatesToNode_ (edge nodes)
+        await self.execute_query(
+            """
+            MATCH (n:RelatesToNode_)
+            WHERE n.group_id = $group_id
+            DELETE n
+            """,
+            group_id=group_id,
+        )
+
+        # Delete Community nodes
+        await self.execute_query(
+            """
+            MATCH (n:Community)
+            WHERE n.group_id = $group_id
+            DELETE n
+            """,
+            group_id=group_id,
+        )
+
+        logger.info(f'Deleted group {group_id}')
+
 
 class KuzuDriverSession(GraphDriverSession):
     provider = GraphProvider.KUZU

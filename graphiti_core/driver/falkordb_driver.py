@@ -427,3 +427,14 @@ class FalkorDriver(GraphDriver):
                 group_ids.append(key)
 
         return sorted(group_ids)
+
+    async def delete_group(self, group_id: str) -> None:
+        """
+        Delete a FalkorDB graph completely.
+
+        In FalkorDB, each group_id is a separate Redis graph key.
+        Uses GRAPH.DELETE to remove the entire graph.
+        """
+        redis_conn = self.client.connection
+        await redis_conn.execute_command('GRAPH.DELETE', group_id)
+        logger.info(f'Deleted graph {group_id}')
