@@ -398,6 +398,22 @@ class NeptuneDriver(GraphDriver):
 
         logger.info(f'Renamed group {old_group_id} to {new_group_id}')
 
+    async def list_groups(self) -> list[str]:
+        """
+        List all groups (distinct group_ids) in Neptune.
+
+        In Neptune, all groups are in one database, distinguished by group_id property.
+        """
+        records, _, _ = await self.execute_query(
+            """
+            MATCH (n)
+            WHERE n.group_id IS NOT NULL
+            RETURN DISTINCT n.group_id AS group_id
+            ORDER BY group_id
+            """,
+        )
+        return [record['group_id'] for record in records]
+
 
 class NeptuneDriverSession(GraphDriverSession):
     provider = GraphProvider.NEPTUNE

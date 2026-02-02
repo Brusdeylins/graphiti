@@ -148,3 +148,17 @@ class GraphDriver(ABC):
             The new group ID.
         """
         raise NotImplementedError(f'rename_group not implemented for {self.provider}')
+
+    async def list_groups(self) -> list[str]:
+        """
+        List all available groups/databases.
+
+        For Neo4j: Returns distinct group_ids from nodes.
+        For FalkorDB: Returns all graph names (Redis keys of type 'graphdata').
+
+        Returns
+        -------
+        list[str]
+            List of group/database names.
+        """
+        raise NotImplementedError(f'list_groups not implemented for {self.provider}')

@@ -388,3 +388,42 @@ class FalkorDriver(GraphDriver):
         # Delete old graph
         await redis_conn.execute_command('GRAPH.DELETE', old_group_id)
         logger.info(f'Deleted old graph {old_group_id}')
+
+    async def list_groups(self) -> list[str]:
+        """
+        List all FalkorDB graphs (groups).
+
+        In FalkorDB, each group is stored as a separate Redis key of type 'graphdata'.
+        Returns all graph names excluding system/internal keys.
+        """
+        # Excluded system/internal graphs
+        excluded_graphs = {'graphiti', 'default_db', self._database.lower()}
+
+        redis_conn = self.client.connection
+        group_ids = []
+
+        # Get all keys
+        keys = await redis_conn.keys('*')
+
+        for key in keys:
+            # Decode if bytes
+            if isinstance(key, bytes):
+                key = key.decode('utf-8')
+
+            # Skip internal/system keys
+            if key.startswith('_') or key.startswith('graphiti:') or key.startswith('telemetry{'):
+                continue
+
+            # Skip known system graphs
+            if key.lower() in excluded_graphs:
+                continue
+
+            # Check if it's a FalkorDB graph
+            key_type = await redis_conn.type(key)
+            if isinstance(key_type, bytes):
+                key_type = key_type.decode('utf-8')
+
+            if key_type == 'graphdata':
+                group_ids.append(key)
+
+        return sorted(group_ids)

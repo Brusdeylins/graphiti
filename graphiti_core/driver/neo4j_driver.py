@@ -222,3 +222,20 @@ class Neo4jDriver(GraphDriver):
         )
 
         logger.info(f'Renamed group {old_group_id} to {new_group_id}')
+
+    async def list_groups(self) -> list[str]:
+        """
+        List all groups (distinct group_ids) in Neo4j.
+
+        In Neo4j, all groups are in one database, distinguished by group_id property.
+        """
+        records, _, _ = await self.execute_query(
+            """
+            MATCH (n)
+            WHERE n.group_id IS NOT NULL
+            RETURN DISTINCT n.group_id AS group_id
+            ORDER BY group_id
+            """,
+            routing_='r',
+        )
+        return [record['group_id'] for record in records]
