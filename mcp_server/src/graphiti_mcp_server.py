@@ -1043,6 +1043,101 @@ async def http_delete_entity_type(request) -> JSONResponse:
         return JSONResponse({'error': str(e)}, status_code=500)
 
 
+# =============================================================================
+# HTTP Endpoints for Groups and Stats (DB-neutral)
+# =============================================================================
+
+
+@mcp.custom_route('/groups', methods=['GET'])
+async def http_get_groups(request) -> JSONResponse:
+    """Get all available group IDs from the database.
+
+    For FalkorDB, each group is stored as a separate graph (Redis key with type 'graphdata').
+    """
+    global graphiti_service, config
+
+    if graphiti_service is None:
+        return JSONResponse({'error': 'Graphiti service not initialized'}, status_code=500)
+
+    try:
+        client = await graphiti_service.get_client()
+
+        # FalkorDB-specific: list all graphs
+        if config.database.provider.lower() == 'falkordb':
+            import redis.asyncio as redis_async
+
+            db_config = DatabaseDriverFactory.create_config(config.database)
+            r = redis_async.Redis(
+                host=db_config.get('host', 'localhost'),
+                port=db_config.get('port', 6379),
+                password=db_config.get('password'),
+                decode_responses=True,
+            )
+
+            # Excluded system/internal graphs
+            excluded_graphs = {'graphiti', 'default_db'}
+            group_ids = []
+
+            keys = await r.keys('*')
+            for key in keys:
+                # Skip internal/system keys
+                if key.startswith('_') or key.startswith('graphiti:') or key.startswith('telemetry{'):
+                    continue
+                if key.lower() in excluded_graphs:
+                    continue
+
+                # Check if it's a FalkorDB graph
+                key_type = await r.type(key)
+                if key_type == 'graphdata':
+                    group_ids.append(key)
+
+            await r.aclose()
+            return JSONResponse({'groups': sorted(group_ids)})
+        else:
+            # Neo4j: Query distinct group_ids from nodes
+            query = 'MATCH (n:Entity) RETURN DISTINCT n.group_id AS group_id'
+            async with client.driver.session() as session:
+                result = await session.run(query)
+                records = [record async for record in result]
+                group_ids = [r['group_id'] for r in records if r['group_id']]
+
+            return JSONResponse({'groups': sorted(set(group_ids))})
+
+    except Exception as e:
+        logger.error(f'Error getting groups: {e}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@mcp.custom_route('/stats', methods=['GET'])
+async def http_get_stats(request) -> JSONResponse:
+    """Get graph statistics.
+
+    Query parameters:
+        - group_id: Optional group ID to filter stats
+    """
+    global graphiti_service
+
+    if graphiti_service is None:
+        return JSONResponse({'error': 'Graphiti service not initialized'}, status_code=500)
+
+    try:
+        client = await graphiti_service.get_client()
+        group_id = request.query_params.get('group_id')
+
+        # Use Graphiti's built-in stats method
+        stats = await client.get_graph_stats(group_id=group_id)
+
+        return JSONResponse({
+            'nodes': stats.get('node_count', 0),
+            'edges': stats.get('edge_count', 0),
+            'episodes': stats.get('episode_count', 0),
+        })
+
+    except Exception as e:
+        logger.error(f'Error getting stats: {e}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
 async def initialize_server() -> ServerConfig:
     """Parse CLI arguments and initialize the Graphiti server configuration."""
     global config, graphiti_service, queue_service, entity_type_service, graphiti_client, semaphore
