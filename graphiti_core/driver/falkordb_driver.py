@@ -402,15 +402,20 @@ class FalkorDriver(GraphDriver):
 
         In FalkorDB, each group is stored as a separate Redis key of type 'graphdata'.
         Returns all graph names excluding system/internal keys.
+
+        NOTE: Don't exclude self._database because it can change when processing
+        episodes for different groups (Graphiti.add_episode clones the driver).
         """
-        # Excluded system/internal graphs
-        excluded_graphs = {'graphiti', 'default_db', self._database.lower()}
+        # Excluded system/internal graphs (hardcoded, not based on current _database)
+        excluded_graphs = {'graphiti', 'default_db'}
+        logger.info(f'list_groups: excluded={excluded_graphs}')
 
         redis_conn = self.client.connection
         group_ids = []
 
         # Get all keys
         keys = await redis_conn.keys('*')
+        logger.info(f'list_groups: found {len(keys)} keys: {keys[:5] if keys else []}')
 
         for key in keys:
             # Decode if bytes
@@ -432,7 +437,9 @@ class FalkorDriver(GraphDriver):
 
             if key_type == 'graphdata':
                 group_ids.append(key)
+                logger.debug(f'list_groups: found graph {key}')
 
+        logger.info(f'list_groups: returning {len(group_ids)} groups: {group_ids}')
         return sorted(group_ids)
 
     async def delete_group(self, group_id: str) -> None:
