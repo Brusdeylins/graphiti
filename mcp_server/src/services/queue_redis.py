@@ -98,6 +98,7 @@ class RedisStreamsBackend(QueueBackend):
         # Task references stored to prevent GC collection
         self._worker_tasks: dict[str, asyncio.Task] = {}
         self._worker_running: dict[str, bool] = {}
+        self._worker_processing: dict[str, bool] = {}  # True when actively processing a message
         self._shutting_down: bool = False
 
         # Unique consumer name per instance
@@ -290,7 +291,11 @@ class RedisStreamsBackend(QueueBackend):
 
                 for _stream_name, stream_messages in messages:
                     for message_id, data in stream_messages:
-                        await self._process_message(group_id, message_id, data)
+                        self._worker_processing[group_id] = True
+                        try:
+                            await self._process_message(group_id, message_id, data)
+                        finally:
+                            self._worker_processing[group_id] = False
 
         except asyncio.CancelledError:
             logger.info(f'Worker for {group_id} cancelled')
@@ -455,12 +460,12 @@ class RedisStreamsBackend(QueueBackend):
 
                 total_pending += pending_count
 
-                # Check if worker is running
-                is_running = self._worker_running.get(group_id, False)
-                if is_running:
+                # Check if actively processing (not just waiting for messages)
+                is_processing = self._worker_processing.get(group_id, False)
+                if is_processing:
                     currently_processing += 1
 
-                if pending_count > 0 or is_running:
+                if pending_count > 0 or is_processing:
                     groups_info.append({
                         'group_id': group_id,
                         'pending': pending_count,
