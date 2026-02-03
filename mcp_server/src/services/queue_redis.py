@@ -423,7 +423,7 @@ class RedisStreamsBackend(QueueBackend):
         except Exception:
             return 0
 
-    async def get_all_pending_async(self) -> tuple[int, int, list[dict]]:
+    async def get_all_pending_count_async(self) -> tuple[int, int, list[dict]]:
         """Get total pending count, active workers, and per-group breakdown.
 
         Uses XPENDING to get actual unacknowledged message count (not XLEN which

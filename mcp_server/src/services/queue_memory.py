@@ -214,7 +214,7 @@ class InMemoryBackend(QueueBackend):
         queue = self._queues.get(group_id)
         return queue.qsize() if queue else 0
 
-    async def get_all_pending_async(self) -> tuple[int, int, list[dict]]:
+    async def get_all_pending_count_async(self) -> tuple[int, int, list[dict]]:
         """Get total pending count, active workers, and per-group breakdown."""
         total_pending = 0
         currently_processing = 0

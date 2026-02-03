@@ -884,8 +884,8 @@ async def queue_status(request) -> JSONResponse:
 
     try:
         # Use async method if available (Redis backend)
-        if hasattr(queue_service, 'get_all_pending_async'):
-            total_pending, currently_processing, groups = await queue_service.get_all_pending_async()
+        if hasattr(queue_service, 'get_all_pending_count_async'):
+            total_pending, currently_processing, groups = await queue_service.get_all_pending_count_async()
             return JSONResponse({
                 'total_pending': total_pending,
                 'currently_processing': currently_processing,
