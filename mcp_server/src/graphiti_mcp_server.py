@@ -1049,64 +1049,6 @@ async def http_delete_entity_type(request) -> JSONResponse:
         logger.error(f'Error deleting entity type: {e}')
         return JSONResponse({'error': str(e)}, status_code=500)
 
-
-# =============================================================================
-# HTTP Endpoints for Groups and Stats (DB-neutral)
-# =============================================================================
-
-
-@mcp.custom_route('/groups', methods=['GET'])
-async def http_get_groups(request) -> JSONResponse:
-    """Get all available group IDs from the database.
-
-    Uses the DB-neutral Graphiti.get_groups() method which delegates to
-    the driver's list_groups() implementation (works for all 4 DB providers).
-    """
-    global graphiti_service
-
-    if graphiti_service is None:
-        return JSONResponse({'error': 'Graphiti service not initialized'}, status_code=500)
-
-    try:
-        client = await graphiti_service.get_client()
-        groups = await client.get_groups()
-        return JSONResponse({'groups': groups})
-
-    except Exception as e:
-        logger.error(f'Error getting groups: {e}')
-        return JSONResponse({'error': str(e)}, status_code=500)
-
-
-@mcp.custom_route('/stats', methods=['GET'])
-async def http_get_stats(request) -> JSONResponse:
-    """Get graph statistics.
-
-    Query parameters:
-        - group_id: Optional group ID to filter stats
-    """
-    global graphiti_service
-
-    if graphiti_service is None:
-        return JSONResponse({'error': 'Graphiti service not initialized'}, status_code=500)
-
-    try:
-        client = await graphiti_service.get_client()
-        group_id = request.query_params.get('group_id')
-
-        # Use Graphiti's built-in stats method
-        stats = await client.get_graph_stats(group_id=group_id)
-
-        return JSONResponse({
-            'nodes': stats.get('node_count', 0),
-            'edges': stats.get('edge_count', 0),
-            'episodes': stats.get('episode_count', 0),
-        })
-
-    except Exception as e:
-        logger.error(f'Error getting stats: {e}')
-        return JSONResponse({'error': str(e)}, status_code=500)
-
-
 async def initialize_server() -> ServerConfig:
     """Parse CLI arguments and initialize the Graphiti server configuration."""
     global config, graphiti_service, queue_service, entity_type_service, graphiti_client, semaphore
