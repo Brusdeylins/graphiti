@@ -854,8 +854,11 @@ async def update_entity_edge(
         # Get the existing edge
         entity_edge = await EntityEdge.get_by_uuid(client.driver, uuid)
 
-        # Track changes
+        # Track changes and detect endpoint changes
         changes = []
+        endpoints_changed = False
+        original_source = entity_edge.source_node_uuid
+        original_target = entity_edge.target_node_uuid
 
         # Validate and update source node
         if source_node_uuid is not None and source_node_uuid != entity_edge.source_node_uuid:
@@ -863,6 +866,7 @@ async def update_entity_edge(
             await EntityNode.get_by_uuid(client.driver, source_node_uuid)
             entity_edge.source_node_uuid = source_node_uuid
             changes.append(f'source_node_uuid -> {source_node_uuid}')
+            endpoints_changed = True
 
         # Validate and update target node
         if target_node_uuid is not None and target_node_uuid != entity_edge.target_node_uuid:
@@ -870,6 +874,7 @@ async def update_entity_edge(
             await EntityNode.get_by_uuid(client.driver, target_node_uuid)
             entity_edge.target_node_uuid = target_node_uuid
             changes.append(f'target_node_uuid -> {target_node_uuid}')
+            endpoints_changed = True
 
         # Update fact text
         if fact is not None and fact != entity_edge.fact:
@@ -888,7 +893,22 @@ async def update_entity_edge(
         if fact is not None:
             await entity_edge.generate_embedding(client.llm_client.embedder)
 
-        # Save the updated edge
+        # If endpoints changed, we must delete old edge first then create new one
+        # (Graph DBs don't allow changing edge endpoints in place)
+        if endpoints_changed:
+            # Delete the old edge using direct query to ensure it's removed
+            await client.driver.execute_query(
+                """
+                MATCH (:Entity {uuid: $source_uuid})-[e:RELATES_TO {uuid: $edge_uuid}]->(:Entity {uuid: $target_uuid})
+                DELETE e
+                """,
+                source_uuid=original_source,
+                target_uuid=original_target,
+                edge_uuid=uuid,
+            )
+            logger.info(f'Deleted old edge {uuid} from {original_source} -> {original_target}')
+
+        # Save the edge (creates new if endpoints changed, updates if not)
         await entity_edge.save(client.driver)
 
         logger.info(f'Updated entity edge {uuid}: {", ".join(changes)}')
