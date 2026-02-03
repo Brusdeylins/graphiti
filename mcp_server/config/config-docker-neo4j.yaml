@@ -315,6 +315,10 @@ graphiti:
     - name: "Rule"
       description: "Constraint, policy, or decision logic (game rules, business rules, etc.). For complex logic, build a Condition tree: Rule→Condition(operator=and/or)→Condition(operator=leaf). Edges: →Condition (evaluates - root of condition tree), →Organization (enterprise_policy_of), →Project (applies_in), →Requirement (implements, derived_from), →Domain (belongs_to), →UseCase (enforced_in), →Component (enforced_by)."
       fields:
+        - name: "statement"
+          type: "str"
+          required: false
+          description: "The rule statement or definition in natural language"
         - name: "type"
           type: "str"
           required: false
