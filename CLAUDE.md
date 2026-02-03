@@ -28,6 +28,8 @@ This is a fork of [getzep/graphiti](https://github.com/getzep/graphiti) with add
 | **Transport Security** | `mcp_server/src/config/schema.py` | `allowed_hosts`, `allowed_origins` for secure remote access |
 | **FalkorDB Single Group-ID Fix** | `decorators.py`, `search/search_filters.py` | Fix for searches with single `group_id` returning empty results |
 | **FalkorDB Label Syntax** | `search/search_filters.py` | Use OR conditions instead of Neo4j's pipe syntax for multi-label queries |
+| **Queue Abstraction** | `mcp_server/src/services/queue_*.py` | Pluggable queue backends (Redis Streams, In-Memory) with crash recovery |
+| **Entity Type Fields** | `mcp_server/src/services/entity_type_service.py` | Structured field definitions for entity types with file-based persistence |
 
 ### Changelog
 
@@ -42,6 +44,44 @@ This is a fork of [getzep/graphiti](https://github.com/getzep/graphiti) with add
 2. `graphiti_core/search/search_filters.py`: Added FalkorDB-specific label syntax (OR conditions instead of Neo4j's pipe syntax `n:Label1|Label2`)
 
 **Deployment:** Built wheel locally, transferred to Ubuntu VM, installed via `uv pip install` in Docker image.
+
+#### Queue Abstraction (feature/queue-abstraction)
+
+Pluggable queue backends for async episode processing with crash recovery.
+
+**Files:**
+- `mcp_server/src/services/queue_backend.py` - Abstract interface
+- `mcp_server/src/services/queue_redis.py` - Redis Streams backend (persistent)
+- `mcp_server/src/services/queue_memory.py` - In-Memory backend (simple)
+
+**Key Methods (QueueBackend interface):**
+```python
+# Add episode to queue for background processing
+async def add_episode(group_id, name, content, ...) -> str
+
+# Graceful shutdown
+async def shutdown(timeout: float | None = None) -> None
+
+# Sync method - works for memory backend, returns 0 for Redis
+def get_queue_size(group_id: str) -> int
+
+# Check if worker is active
+def is_worker_running(group_id: str) -> bool
+```
+
+**Redis-specific async methods:**
+```python
+# Get actual pending count via XPENDING (Redis only)
+async def get_pending_count_async(group_id: str) -> int
+
+# Get total pending, processing count, per-group breakdown
+async def get_all_pending_async() -> tuple[int, int, list[dict]]
+```
+
+**REST Endpoint:** `GET /queue/status` returns:
+```json
+{"total_pending": 2, "currently_processing": 1, "groups": [...]}
+```
 
 ### Upstream Sync
 
