@@ -411,19 +411,16 @@ class RedisStreamsBackend(QueueBackend):
         """
         return 0
 
-    async def get_queue_size_async(self, group_id: str) -> int:
-        """Get pending (unacknowledged) message count from Redis Stream."""
+    async def get_pending_count_async(self, group_id: str) -> int:
+        """Get actual pending (unacknowledged) message count via XPENDING."""
         if self._redis is None:
             return 0
+
+        stream_key = self._stream_key(group_id)
         try:
-            stream_key = f'graphiti:queue:{group_id}'
-            # XPENDING returns [count, min_id, max_id, [[consumer, count], ...]]
             pending_info = await self._redis.xpending(stream_key, self._config.consumer_group)
-            if pending_info and pending_info['pending']:
-                return pending_info['pending']
-            return 0
-        except Exception as e:
-            logger.debug(f'Error getting queue size for {group_id}: {e}')
+            return pending_info.get('pending', 0) if pending_info else 0
+        except Exception:
             return 0
 
     async def get_all_pending_async(self) -> tuple[int, int, list[dict]]:
@@ -443,21 +440,15 @@ class RedisStreamsBackend(QueueBackend):
         groups_info = []
 
         try:
-            # Find all queue streams
             keys = await self._redis.keys('graphiti:queue:*')
             for key in keys:
                 if isinstance(key, bytes):
                     key = key.decode('utf-8')
+                if ':dlq' in key:
+                    continue
+
                 group_id = key.replace('graphiti:queue:', '')
-
-                # Get pending (unacknowledged) count via XPENDING
-                try:
-                    pending_info = await self._redis.xpending(key, self._config.consumer_group)
-                    pending_count = pending_info['pending'] if pending_info else 0
-                except Exception:
-                    # Consumer group might not exist yet
-                    pending_count = await self._redis.xlen(key)
-
+                pending_count = await self.get_pending_count_async(group_id)
                 total_pending += pending_count
 
                 # Check if actively processing (not just waiting for messages)
@@ -469,7 +460,7 @@ class RedisStreamsBackend(QueueBackend):
                     groups_info.append({
                         'group_id': group_id,
                         'pending': pending_count,
-                        'processing': is_running,
+                        'processing': is_processing,
                     })
         except Exception as e:
             logger.error(f'Error getting all pending: {e}')
