@@ -407,7 +407,7 @@ class RedisStreamsBackend(QueueBackend):
     def get_queue_size(self, group_id: str) -> int:
         """Get pending message count (approximate - requires async call for accuracy).
 
-        Note: This sync method returns 0. Use get_queue_size_async for actual count.
+        Note: This sync method returns 0. Use get_pending_count_async() for actual count.
         """
         return 0
 
