@@ -110,7 +110,7 @@ def is_worker_running(group_id: str) -> bool
 async def get_pending_count_async(group_id: str) -> int
 
 # Get total pending, processing count, per-group breakdown
-async def get_all_pending_async() -> tuple[int, int, list[dict]]
+async def get_all_pending_count_async() -> tuple[int, int, list[dict]]
 ```
 
 **REST Endpoint:** `GET /queue/status` returns:
