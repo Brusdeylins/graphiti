@@ -403,6 +403,54 @@ class RedisStreamsBackend(QueueBackend):
         """Get pending message count (approximate - requires async call for accuracy)."""
         return 0
 
+    async def get_pending_count_async(self, group_id: str) -> int:
+        """Get actual pending (unacknowledged) message count via XPENDING."""
+        if self._redis is None:
+            return 0
+
+        stream_key = self._stream_key(group_id)
+        try:
+            pending_info = await self._redis.xpending(stream_key, self._config.consumer_group)
+            return pending_info.get('pending', 0) if pending_info else 0
+        except Exception:
+            return 0
+
+    async def get_all_pending_async(self) -> tuple[int, int, list[dict]]:
+        """Get total pending count, active workers, and per-group breakdown."""
+        if self._redis is None:
+            return 0, 0, []
+
+        total_pending = 0
+        currently_processing = 0
+        groups_info = []
+
+        try:
+            keys = await self._redis.keys('graphiti:queue:*')
+            for key in keys:
+                if isinstance(key, bytes):
+                    key = key.decode('utf-8')
+                if ':dlq' in key:
+                    continue
+
+                group_id = key.replace('graphiti:queue:', '')
+                pending_count = await self.get_pending_count_async(group_id)
+                total_pending += pending_count
+
+                is_processing = self._worker_running.get(group_id, False)
+                if is_processing:
+                    currently_processing += 1
+
+                if pending_count > 0 or is_processing:
+                    groups_info.append({
+                        'group_id': group_id,
+                        'pending': pending_count,
+                        'processing': is_processing,
+                    })
+        except Exception as e:
+            logger.error(f'Error getting all pending: {e}')
+
+        return total_pending, currently_processing, groups_info
+
     def is_worker_running(self, group_id: str) -> bool:
         """Check if a worker is running for a group_id."""
         return self._worker_running.get(group_id, False)
