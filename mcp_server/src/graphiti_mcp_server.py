@@ -396,35 +396,39 @@ async def add_memory(
     This function returns immediately and processes the episode addition in the background.
     Episodes for the same group_id are processed sequentially to avoid race conditions.
 
+    IMPORTANT - Entity Resolution Best Practices:
+    - Use natural language (source='text') for best entity matching with existing nodes
+    - Be consistent with entity names across episodes (e.g., always "Tank" not sometimes "Panzer")
+    - Use the same language consistently within a graph to improve entity resolution
+    - JSON source may create entities that don't match well with text-based entities
+
     Args:
         name (str): Name of the episode
-        episode_body (str): The content of the episode to persist to memory. When source='json', this must be a
-                           properly escaped JSON string, not a raw Python dictionary. The JSON data will be
-                           automatically processed to extract entities and relationships.
+        episode_body (str): The content of the episode to persist to memory.
+                           RECOMMENDED: Use natural language sentences for better entity resolution.
+                           When source='json', this must be a properly escaped JSON string.
         group_id (str, optional): A unique ID for this graph. If not provided, uses the default group_id from CLI
                                  or a generated one.
         source (str, optional): Source type, must be one of:
-                               - 'text': For plain text content (default)
-                               - 'json': For structured data
+                               - 'text': For plain text content (default, RECOMMENDED for entity resolution)
+                               - 'json': For structured data (may create entities that don't merge well)
                                - 'message': For conversation-style content
         source_description (str, optional): Description of the source
         uuid (str, optional): Optional UUID for the episode
 
     Examples:
-        # Adding plain text content
+        # RECOMMENDED: Natural language for better entity resolution
         add_memory(
-            name="Company News",
-            episode_body="Acme Corp announced a new product line today.",
+            name="Game Stats",
+            episode_body="The Tank entity has 100 hit points and deals 25 damage per shot.",
             source="text",
-            source_description="news article",
-            group_id="some_arbitrary_string"
+            source_description="game documentation"
         )
 
-        # Adding structured JSON data
-        # NOTE: episode_body should be a JSON string (standard JSON escaping)
+        # JSON (use only when structure is essential, entity matching may be worse)
         add_memory(
             name="Customer Profile",
-            episode_body='{"company": {"name": "Acme Technologies"}, "products": [{"id": "P001", "name": "CloudSync"}, {"id": "P002", "name": "DataMiner"}]}',
+            episode_body='{"company": {"name": "Acme Technologies"}, "products": [{"id": "P001", "name": "CloudSync"}]}',
             source="json",
             source_description="CRM data"
         )
