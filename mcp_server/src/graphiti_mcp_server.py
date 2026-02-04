@@ -803,8 +803,10 @@ async def update_entity(
             return format_node_result(entity_node)
 
         # Regenerate embeddings if name or summary changed
-        if name is not None or summary is not None:
+        if name is not None:
             await entity_node.generate_name_embedding(client.llm_client.embedder)
+        if summary is not None:
+            await entity_node.generate_summary_embedding(client.llm_client.embedder)
 
         # Save the updated node
         await entity_node.save(client.driver)
