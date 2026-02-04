@@ -25,7 +25,7 @@ from typing_extensions import LiteralString
 from graphiti_core.cross_encoder.client import CrossEncoderClient
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.decorators import handle_multiple_group_ids
-from graphiti_core.driver.driver import GraphDriver
+from graphiti_core.driver.driver import GraphDriver, GraphProvider
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.edges import (
     CommunityEdge,
@@ -1940,8 +1940,13 @@ class Graphiti:
         list[EntityNode]
             List of entity nodes.
         """
+        # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB:
+            driver = driver.clone(database=group_id)
+
         return await EntityNode.get_by_group_ids(
-            self.driver, [group_id], limit=limit, uuid_cursor=uuid_cursor
+            driver, [group_id], limit=limit, uuid_cursor=uuid_cursor
         )
 
     async def get_edges_by_group_id(
@@ -1972,8 +1977,13 @@ class Graphiti:
         GroupsEdgesNotFoundError
             If no edges found for the group.
         """
+        # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB:
+            driver = driver.clone(database=group_id)
+
         return await EntityEdge.get_by_group_ids(
-            self.driver, [group_id], limit=limit, uuid_cursor=uuid_cursor
+            driver, [group_id], limit=limit, uuid_cursor=uuid_cursor
         )
 
     async def get_episodes_by_group_id(
@@ -1999,8 +2009,13 @@ class Graphiti:
         list[EpisodicNode]
             List of episodic nodes.
         """
+        # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB:
+            driver = driver.clone(database=group_id)
+
         return await EpisodicNode.get_by_group_ids(
-            self.driver, [group_id], limit=limit, uuid_cursor=uuid_cursor
+            driver, [group_id], limit=limit, uuid_cursor=uuid_cursor
         )
 
     async def get_groups(self) -> list[str]:
