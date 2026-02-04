@@ -24,10 +24,12 @@ from starlette.responses import JSONResponse
 
 from config.schema import GraphitiConfig, ServerConfig
 from models.response_types import (
+    EdgeListResponse,
     EntityTypesResponse,
     EpisodeSearchResponse,
     ErrorResponse,
     FactSearchResponse,
+    NodeListResponse,
     NodeResult,
     NodeSearchResponse,
     StatusResponse,
@@ -745,6 +747,146 @@ async def get_entity_edges_by_node(
         error_msg = str(e)
         logger.error(f'Error getting edges by node: {error_msg}')
         return ErrorResponse(error=f'Error getting edges by node: {error_msg}')
+
+
+@mcp.tool()
+async def list_nodes(
+    group_id: str | None = None,
+    limit: int = 100,
+    cursor: str | None = None,
+) -> NodeListResponse | ErrorResponse:
+    """List all entity nodes in a graph with pagination support.
+
+    Use this tool to:
+    - Get an overview of all entities in a graph
+    - Find duplicate nodes (same or similar names)
+    - Identify orphan nodes or data quality issues
+    - Browse the graph structure without semantic search
+
+    Args:
+        group_id: Graph to list nodes from. Uses default if not provided.
+        limit: Maximum number of nodes to return (default: 100, max: 500)
+        cursor: UUID cursor for pagination. Pass the next_cursor from previous response.
+
+    Returns:
+        List of nodes with pagination info. Use next_cursor for subsequent pages.
+    """
+    global graphiti_service
+
+    if graphiti_service is None:
+        return ErrorResponse(error='Graphiti service not initialized')
+
+    try:
+        client = await graphiti_service.get_client()
+
+        # Use the provided group_id or fall back to the default from config
+        effective_group_id = group_id or config.graphiti.group_id
+
+        if not effective_group_id:
+            return ErrorResponse(error='No group_id provided and no default configured')
+
+        # Clamp limit to reasonable bounds
+        effective_limit = min(max(1, limit), 500)
+
+        # Get nodes with pagination (request one extra to check if there are more)
+        nodes = await client.get_entities_by_group_id(
+            group_id=effective_group_id,
+            limit=effective_limit + 1,
+            uuid_cursor=cursor,
+        )
+
+        # Check if there are more results
+        has_more = len(nodes) > effective_limit
+        if has_more:
+            nodes = nodes[:effective_limit]
+
+        # Format results
+        node_results = [format_node_result(node) for node in nodes]
+
+        # Determine next cursor
+        next_cursor = nodes[-1].uuid if has_more and nodes else None
+
+        return NodeListResponse(
+            message=f'Found {len(node_results)} nodes in group {effective_group_id}',
+            nodes=node_results,
+            total=len(node_results),
+            has_more=has_more,
+            next_cursor=next_cursor,
+        )
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error listing nodes: {error_msg}')
+        return ErrorResponse(error=f'Error listing nodes: {error_msg}')
+
+
+@mcp.tool()
+async def list_edges(
+    group_id: str | None = None,
+    limit: int = 100,
+    cursor: str | None = None,
+) -> EdgeListResponse | ErrorResponse:
+    """List all entity edges (facts/relationships) in a graph with pagination support.
+
+    Use this tool to:
+    - Get an overview of all relationships in a graph
+    - Find redundant or duplicate edges
+    - Analyze graph connectivity
+    - Browse facts without semantic search
+
+    Args:
+        group_id: Graph to list edges from. Uses default if not provided.
+        limit: Maximum number of edges to return (default: 100, max: 500)
+        cursor: UUID cursor for pagination. Pass the next_cursor from previous response.
+
+    Returns:
+        List of edges with pagination info. Use next_cursor for subsequent pages.
+    """
+    global graphiti_service
+
+    if graphiti_service is None:
+        return ErrorResponse(error='Graphiti service not initialized')
+
+    try:
+        client = await graphiti_service.get_client()
+
+        # Use the provided group_id or fall back to the default from config
+        effective_group_id = group_id or config.graphiti.group_id
+
+        if not effective_group_id:
+            return ErrorResponse(error='No group_id provided and no default configured')
+
+        # Clamp limit to reasonable bounds
+        effective_limit = min(max(1, limit), 500)
+
+        # Get edges with pagination (request one extra to check if there are more)
+        edges = await client.get_edges_by_group_id(
+            group_id=effective_group_id,
+            limit=effective_limit + 1,
+            uuid_cursor=cursor,
+        )
+
+        # Check if there are more results
+        has_more = len(edges) > effective_limit
+        if has_more:
+            edges = edges[:effective_limit]
+
+        # Format results
+        edge_results = [format_fact_result(edge) for edge in edges]
+
+        # Determine next cursor
+        next_cursor = edges[-1].uuid if has_more and edges else None
+
+        return EdgeListResponse(
+            message=f'Found {len(edge_results)} edges in group {effective_group_id}',
+            edges=edge_results,
+            total=len(edge_results),
+            has_more=has_more,
+            next_cursor=next_cursor,
+        )
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error listing edges: {error_msg}')
+        return ErrorResponse(error=f'Error listing edges: {error_msg}')
 
 
 @mcp.tool()
