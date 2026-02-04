@@ -45,6 +45,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `feature/queue-abstraction` - Queue Service, Redis Streams
 - `feature/entity-fields` - Entity Type Felder
 - `feature/local-build-helpers` - Build Scripts
+- `feature/update-entity` - Entity CRUD MCP Tools (update/delete nodes & edges)
 
 ### Ausnahme:
 - **graphiti-ui Repo:** Dort kann direkt auf `main` committed werden
@@ -65,8 +66,27 @@ This is a fork of [getzep/graphiti](https://github.com/getzep/graphiti) with add
 | **FalkorDB Label Syntax** | `search/search_filters.py` | Use OR conditions instead of Neo4j's pipe syntax for multi-label queries |
 | **Queue Abstraction** | `mcp_server/src/services/queue_*.py` | Pluggable queue backends (Redis Streams, In-Memory) with crash recovery |
 | **Entity Type Fields** | `mcp_server/src/services/entity_type_service.py` | Structured field definitions for entity types with file-based persistence |
+| **Entity CRUD MCP Tools** | `mcp_server/src/graphiti_mcp_server.py` | Direct entity manipulation: `get_entity_node`, `get_entity_edges_by_node`, `update_entity`, `update_entity_edge`, `delete_entity_node` |
 
 ### Changelog
+
+#### 2026-02-03: Entity CRUD MCP Tools (feature/update-entity)
+
+Direct entity manipulation via MCP without going through LLM extraction.
+
+**New MCP Tools:**
+- `get_entity_node(uuid)` - Get entity node by UUID
+- `get_entity_edges_by_node(node_uuid)` - List all edges connected to a node
+- `update_entity(uuid, name?, summary?, labels?, attributes?)` - Update entity fields, regenerates embeddings
+- `update_entity_edge(uuid, source_node_uuid?, target_node_uuid?, fact?, name?)` - Update edge, handles endpoint changes correctly
+- `delete_entity_node(uuid)` - Delete entity (warns about connected edges)
+
+**Use Cases:**
+1. Correct existing entities without creating duplicates (entity resolution failures)
+2. Merge duplicate entities by moving edges between nodes
+3. Direct data manipulation when LLM extraction produces wrong results
+
+**Important:** When changing edge endpoints (`source_node_uuid`/`target_node_uuid`), the tool deletes the old edge and creates a new one (graph DBs don't allow in-place endpoint changes).
 
 #### 2026-01-24: FalkorDB Multi-Graph Search Fix
 
