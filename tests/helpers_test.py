@@ -152,6 +152,18 @@ embeddings = {
         'test_entity_2 relates to test_entity_3',
         'test_community_1',
         'test_community_2',
+        # CRUD test entities
+        'CRUD Test Entity',
+        'CRUD Test Entity summary',
+        'CRUD Test Target',
+        'CRUD Test Target summary',
+        'Updated Entity Name',
+        'Updated summary text',
+        'WORKS_ON',
+        'CRUD Test Entity works on CRUD Test Target',
+        'Updated fact text',
+        'Temp Entity',
+        'Entity to delete',
     ]
 }
 embeddings['Alice Smith'] = embeddings['Alice']

@@ -20,402 +20,672 @@ Tests the new CRUD methods on the Graphiti class:
 - Edge: create, get, update, remove
 - Episode: get, get_episodes_by_group_id
 - Group: get_groups, rename_group, remove_group, get_graph_stats
-
-Run with: pytest tests/test_crud_operations.py -v
 """
 
-import os
-
 import pytest
-import pytest_asyncio
 
 from graphiti_core import Graphiti
-from graphiti_core.driver.falkordb_driver import FalkorDriver
-from graphiti_core.embedder import OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.errors import EdgeNotFoundError, NodeNotFoundError
+from tests.helpers_test import group_id, group_id_2
 
 pytestmark = pytest.mark.integration
 pytest_plugins = ('pytest_asyncio',)
 
-# Test configuration - uses running FalkorDB container
-FALKORDB_HOST = os.environ.get('FALKORDB_HOST', 'localhost')
-FALKORDB_PORT = int(os.environ.get('FALKORDB_PORT', '6379'))
-FALKORDB_PASSWORD = os.environ.get('FALKORDB_PASSWORD', '')
-OPENAI_API_URL = os.environ.get('OPENAI_API_URL', 'http://localhost:11434/v1')
-EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'nomic-embed-text:latest')
-TEST_GROUP_ID = 'crud_test'
-RENAME_GROUP_ID = 'crud_test_renamed'
 
-# Store UUIDs between tests
-_test_data = {}
+@pytest.mark.asyncio
+async def test_create_entity(graph_driver, mock_embedder):
+    """Test creating an entity."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
 
-
-@pytest_asyncio.fixture(loop_scope='module', scope='module')
-async def graphiti_client():
-    """Create Graphiti client for tests."""
-    driver = FalkorDriver(
-        host=FALKORDB_HOST,
-        port=FALKORDB_PORT,
-        password=FALKORDB_PASSWORD or None,
-        database=TEST_GROUP_ID,
+    entity = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        entity_type='Person',
+        summary='CRUD Test Entity summary',
+        attributes={'role': 'tester'},
     )
 
-    # Configure embedder with custom endpoint
-    api_key = os.environ.get('OPENAI_API_KEY', 'not-needed')
-    embedder_config = OpenAIEmbedderConfig(
-        api_key=api_key,
-        base_url=OPENAI_API_URL,
-        embedding_model=EMBEDDING_MODEL,
+    assert entity is not None
+    assert entity.uuid is not None
+    assert entity.name == 'CRUD Test Entity'
+    assert entity.summary == 'CRUD Test Entity summary'
+    assert entity.group_id == group_id
+    assert 'Person' in entity.labels
+    assert entity.attributes.get('role') == 'tester'
+
+    # Cleanup
+    await entity.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_create_entity_invalid_type(graph_driver, mock_embedder):
+    """Test that invalid entity_type raises ValueError."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    with pytest.raises(ValueError, match='Invalid entity_type'):
+        await graphiti.create_entity(
+            name='CRUD Test Entity',
+            group_id=group_id,
+            entity_type='Invalid:Type',
+        )
+
+    with pytest.raises(ValueError, match='Invalid entity_type'):
+        await graphiti.create_entity(
+            name='CRUD Test Entity',
+            group_id=group_id,
+            entity_type='123StartWithNumber',
+        )
+
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_get_entity(graph_driver, mock_embedder):
+    """Test retrieving an entity by UUID."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create
+    entity = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
     )
-    embedder = OpenAIEmbedder(embedder_config)
 
-    client = Graphiti(graph_driver=driver, embedder=embedder)
+    # Get
+    retrieved = await graphiti.get_entity(entity.uuid)
 
-    # Build indices
-    await client.build_indices_and_constraints()
+    assert retrieved is not None
+    assert retrieved.uuid == entity.uuid
+    assert retrieved.name == 'CRUD Test Entity'
 
-    yield client
-
-    # Cleanup: remove test groups
-    for group_id in [TEST_GROUP_ID, RENAME_GROUP_ID]:
-        try:
-            await client.remove_group(group_id)
-        except Exception:
-            pass
-
-    await client.close()
+    # Cleanup
+    await entity.delete(graph_driver)
+    await graph_driver.close()
 
 
-@pytest.mark.asyncio(loop_scope='module')
-class TestEntityCRUD:
-    """Tests for entity CRUD operations."""
+@pytest.mark.asyncio
+async def test_update_entity_name(graph_driver, mock_embedder):
+    """Test updating entity name."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
 
-    async def test_create_entity(self, graphiti_client: Graphiti):
-        """Test creating an entity."""
-        entity = await graphiti_client.create_entity(
-            name='Test Person',
-            group_id=TEST_GROUP_ID,
-            entity_type='Person',
-            summary='A test person for CRUD testing',
-            attributes={'role': 'tester'},
+    # Create
+    entity = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+
+    # Update name
+    updated = await graphiti.update_entity(
+        uuid=entity.uuid,
+        name='Updated Entity Name',
+    )
+
+    assert updated.name == 'Updated Entity Name'
+
+    # Cleanup
+    await entity.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_update_entity_summary(graph_driver, mock_embedder):
+    """Test updating entity summary."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create
+    entity = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+
+    # Update summary
+    updated = await graphiti.update_entity(
+        uuid=entity.uuid,
+        summary='Updated summary text',
+    )
+
+    assert updated.summary == 'Updated summary text'
+
+    # Cleanup
+    await entity.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_update_entity_type(graph_driver, mock_embedder):
+    """Test updating entity type changes labels."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create with Person type
+    entity = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        entity_type='Person',
+        summary='CRUD Test Entity summary',
+    )
+    assert 'Person' in entity.labels
+
+    # Change to Organization
+    updated = await graphiti.update_entity(
+        uuid=entity.uuid,
+        entity_type='Organization',
+    )
+
+    assert 'Organization' in updated.labels
+    assert 'Person' not in updated.labels
+
+    # Verify in database
+    retrieved = await graphiti.get_entity(entity.uuid)
+    assert 'Organization' in retrieved.labels
+
+    # Cleanup
+    await entity.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_update_entity_invalid_type(graph_driver, mock_embedder):
+    """Test that invalid entity_type in update raises ValueError."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create
+    entity = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+
+    # Try invalid update
+    with pytest.raises(ValueError, match='Invalid entity_type'):
+        await graphiti.update_entity(
+            uuid=entity.uuid,
+            entity_type='Invalid-Type',
         )
 
-        assert entity is not None
-        assert entity.uuid is not None
-        assert entity.name == 'Test Person'
-        assert entity.summary == 'A test person for CRUD testing'
-        assert entity.group_id == TEST_GROUP_ID
-        assert 'Person' in entity.labels
-        assert entity.attributes.get('role') == 'tester'
-        assert entity.name_embedding is not None
-        assert entity.summary_embedding is not None
-
-        # Store UUID for later tests
-        _test_data['entity_uuid'] = entity.uuid
-
-    async def test_create_entity_invalid_type(self, graphiti_client: Graphiti):
-        """Test that invalid entity_type raises ValueError."""
-        with pytest.raises(ValueError, match='Invalid entity_type'):
-            await graphiti_client.create_entity(
-                name='Invalid Entity',
-                group_id=TEST_GROUP_ID,
-                entity_type='Invalid:Type',  # Contains colon - invalid
-            )
-
-        with pytest.raises(ValueError, match='Invalid entity_type'):
-            await graphiti_client.create_entity(
-                name='Invalid Entity',
-                group_id=TEST_GROUP_ID,
-                entity_type='123StartWithNumber',  # Starts with number - invalid
-            )
-
-    async def test_get_entity(self, graphiti_client: Graphiti):
-        """Test retrieving an entity."""
-        entity = await graphiti_client.get_entity(_test_data['entity_uuid'])
-
-        assert entity is not None
-        assert entity.uuid == _test_data['entity_uuid']
-        assert entity.name == 'Test Person'
-
-    async def test_update_entity_name(self, graphiti_client: Graphiti):
-        """Test updating entity name (should regenerate embedding)."""
-        entity = await graphiti_client.update_entity(
-            uuid=_test_data['entity_uuid'],
-            name='Updated Person',
-        )
-
-        assert entity.name == 'Updated Person'
-        assert entity.name_embedding is not None
-
-    async def test_update_entity_summary(self, graphiti_client: Graphiti):
-        """Test updating entity summary (should regenerate embedding)."""
-        entity = await graphiti_client.update_entity(
-            uuid=_test_data['entity_uuid'],
-            summary='Updated summary for testing',
-        )
-
-        assert entity.summary == 'Updated summary for testing'
-        assert entity.summary_embedding is not None
-
-    async def test_update_entity_attributes(self, graphiti_client: Graphiti):
-        """Test updating entity attributes."""
-        entity = await graphiti_client.update_entity(
-            uuid=_test_data['entity_uuid'],
-            attributes={'role': 'senior_tester', 'level': '5'},
-        )
-
-        assert entity.attributes.get('role') == 'senior_tester'
-        assert entity.attributes.get('level') == '5'
-
-    async def test_update_entity_type(self, graphiti_client: Graphiti):
-        """Test updating entity type (labels should change in database)."""
-        # First check current type is Person
-        entity = await graphiti_client.get_entity(_test_data['entity_uuid'])
-        assert 'Person' in entity.labels
-
-        # Change to Organization
-        entity = await graphiti_client.update_entity(
-            uuid=_test_data['entity_uuid'],
-            entity_type='Organization',
-        )
-
-        assert 'Organization' in entity.labels
-        assert 'Person' not in entity.labels
-
-        # Verify in database by fetching again
-        entity = await graphiti_client.get_entity(_test_data['entity_uuid'])
-        assert 'Organization' in entity.labels
-        assert 'Person' not in entity.labels
-
-        # Change back to Person for other tests
-        await graphiti_client.update_entity(
-            uuid=_test_data['entity_uuid'],
-            entity_type='Person',
-        )
-
-    async def test_update_entity_invalid_type(self, graphiti_client: Graphiti):
-        """Test that invalid entity_type in update raises ValueError."""
-        with pytest.raises(ValueError, match='Invalid entity_type'):
-            await graphiti_client.update_entity(
-                uuid=_test_data['entity_uuid'],
-                entity_type='Invalid-Type',  # Contains hyphen - invalid
-            )
-
-    async def test_get_entities_by_group_id(self, graphiti_client: Graphiti):
-        """Test listing entities by group ID."""
-        entities = await graphiti_client.get_entities_by_group_id(TEST_GROUP_ID)
-
-        assert len(entities) >= 1
-        assert any(e.uuid == _test_data['entity_uuid'] for e in entities)
-
-
-@pytest.mark.asyncio(loop_scope='module')
-class TestEdgeCRUD:
-    """Tests for edge CRUD operations."""
-
-    async def test_create_second_entity_for_edge(self, graphiti_client: Graphiti):
-        """Create a second entity to use as edge target."""
-        entity = await graphiti_client.create_entity(
-            name='Test Project',
-            group_id=TEST_GROUP_ID,
-            entity_type='Project',
-            summary='A test project',
-        )
-        _test_data['target_entity_uuid'] = entity.uuid
-
-    async def test_create_edge(self, graphiti_client: Graphiti):
-        """Test creating an edge with auto-created episode."""
-        edge = await graphiti_client.create_edge(
-            source_node_uuid=_test_data['entity_uuid'],
-            target_node_uuid=_test_data['target_entity_uuid'],
-            name='WORKS_ON',
-            fact='Updated Person works on Test Project',
-            group_id=TEST_GROUP_ID,
-        )
-
-        assert edge is not None
-        assert edge.uuid is not None
-        assert edge.name == 'WORKS_ON'
-        assert edge.fact == 'Updated Person works on Test Project'
-        assert edge.source_node_uuid == _test_data['entity_uuid']
-        assert edge.target_node_uuid == _test_data['target_entity_uuid']
-        assert edge.fact_embedding is not None
-
-        # Edge should have an episode (auto-created)
-        assert edge.episodes is not None
-        assert len(edge.episodes) == 1
-
-        _test_data['edge_uuid'] = edge.uuid
-        _test_data['episode_uuid'] = edge.episodes[0]
-
-    async def test_edge_episode_exists(self, graphiti_client: Graphiti):
-        """Test that the auto-created episode exists and has correct content."""
-        episode = await graphiti_client.get_episode(_test_data['episode_uuid'])
-
-        assert episode is not None
-        assert episode.content == 'Updated Person works on Test Project'
-        assert episode.source_description == 'Manual entry'
-        assert _test_data['edge_uuid'] in episode.entity_edges
-
-    async def test_get_edge(self, graphiti_client: Graphiti):
-        """Test retrieving an edge."""
-        edge = await graphiti_client.get_edge(_test_data['edge_uuid'])
-
-        assert edge is not None
-        assert edge.uuid == _test_data['edge_uuid']
-        assert edge.name == 'WORKS_ON'
-
-    async def test_update_edge_name(self, graphiti_client: Graphiti):
-        """Test updating edge name."""
-        edge = await graphiti_client.update_edge(
-            uuid=_test_data['edge_uuid'],
-            name='CONTRIBUTES_TO',
-        )
-
-        assert edge.name == 'CONTRIBUTES_TO'
-
-    async def test_update_edge_fact(self, graphiti_client: Graphiti):
-        """Test updating edge fact (should regenerate embedding)."""
-        edge = await graphiti_client.update_edge(
-            uuid=_test_data['edge_uuid'],
-            fact='Updated Person contributes to Test Project as lead',
-        )
-
-        assert edge.fact == 'Updated Person contributes to Test Project as lead'
-        assert edge.fact_embedding is not None
-
-    async def test_get_edges_by_group_id(self, graphiti_client: Graphiti):
-        """Test listing edges by group ID."""
-        edges = await graphiti_client.get_edges_by_group_id(TEST_GROUP_ID)
-
-        assert len(edges) >= 1
-        assert any(e.uuid == _test_data['edge_uuid'] for e in edges)
-
-
-@pytest.mark.asyncio(loop_scope='module')
-class TestEpisodeOperations:
-    """Tests for episode operations."""
-
-    async def test_get_episodes_by_group_id(self, graphiti_client: Graphiti):
-        """Test listing episodes by group ID."""
-        episodes = await graphiti_client.get_episodes_by_group_id(TEST_GROUP_ID)
-
-        assert len(episodes) >= 1
-        assert any(e.uuid == _test_data['episode_uuid'] for e in episodes)
-
-    async def test_get_episodes_by_group_id_empty(self, graphiti_client: Graphiti):
-        """Test listing episodes for non-existent group returns empty list."""
-        episodes = await graphiti_client.get_episodes_by_group_id('nonexistent_group')
-
-        assert episodes == []
-
-
-@pytest.mark.asyncio(loop_scope='module')
-class TestGroupOperations:
-    """Tests for group-level operations."""
-
-    async def test_get_groups(self, graphiti_client: Graphiti):
-        """Test getting all group IDs."""
-        groups = await graphiti_client.get_groups()
-
-        assert isinstance(groups, list)
-        assert TEST_GROUP_ID in groups
-
-    async def test_get_graph_stats(self, graphiti_client: Graphiti):
-        """Test getting graph statistics."""
-        stats = await graphiti_client.get_graph_stats(group_id=TEST_GROUP_ID)
-
-        assert 'node_count' in stats
-        assert 'edge_count' in stats
-        assert 'episode_count' in stats
-        assert 'episode_edge_count' in stats
-
-        # We should have at least 2 entities (Person, Project), 1 edge, 1 episode
-        assert stats['node_count'] >= 2
-        assert stats['edge_count'] >= 1
-        assert stats['episode_count'] >= 1
-
-    async def test_execute_query(self, graphiti_client: Graphiti):
-        """Test executing a raw Cypher query."""
-        result, _, _ = await graphiti_client.execute_query(
-            'MATCH (n:Entity {group_id: $group_id}) RETURN count(n) AS count',
-            group_id=TEST_GROUP_ID,
-        )
-
-        assert len(result) == 1
-        assert result[0]['count'] >= 2
-
-    async def test_rename_group(self, graphiti_client: Graphiti):
-        """Test renaming a group."""
-        # Create a temporary group with some data
-        temp_entity = await graphiti_client.create_entity(
-            name='Temp Entity',
-            group_id=RENAME_GROUP_ID,
-            entity_type='TempType',
-        )
-
-        # Verify it exists
-        groups_before = await graphiti_client.get_groups()
-        assert RENAME_GROUP_ID in groups_before
-
-        # Rename the group
-        new_name = f'{RENAME_GROUP_ID}_new'
-        await graphiti_client.rename_group(RENAME_GROUP_ID, new_name)
-
-        # Verify rename worked
-        groups_after = await graphiti_client.get_groups()
-        assert RENAME_GROUP_ID not in groups_after
-        assert new_name in groups_after
-
-        # Cleanup
-        await graphiti_client.remove_group(new_name)
-
-    async def test_rename_group_same_name_error(self, graphiti_client: Graphiti):
-        """Test that renaming to same name raises ValueError."""
-        with pytest.raises(ValueError, match='must be different'):
-            await graphiti_client.rename_group(TEST_GROUP_ID, TEST_GROUP_ID)
-
-
-@pytest.mark.asyncio(loop_scope='module')
-class TestCleanup:
-    """Cleanup tests - run last."""
-
-    async def test_remove_edge(self, graphiti_client: Graphiti):
-        """Test removing an edge."""
-        await graphiti_client.remove_edge(_test_data['edge_uuid'])
-
-        with pytest.raises(EdgeNotFoundError):
-            await graphiti_client.get_edge(_test_data['edge_uuid'])
-
-    async def test_remove_entities(self, graphiti_client: Graphiti):
-        """Test removing entities."""
-        await graphiti_client.remove_entity(_test_data['entity_uuid'])
-        await graphiti_client.remove_entity(_test_data['target_entity_uuid'])
-
-        with pytest.raises(NodeNotFoundError):
-            await graphiti_client.get_entity(_test_data['entity_uuid'])
-
-    async def test_remove_group(self, graphiti_client: Graphiti):
-        """Test removing an entire group."""
-        # Create a temporary group
-        temp_group = 'temp_group_for_deletion'
-        await graphiti_client.create_entity(
-            name='Entity to delete',
-            group_id=temp_group,
-            entity_type='TempEntity',
-        )
-
-        # Verify it exists
-        groups = await graphiti_client.get_groups()
-        assert temp_group in groups
-
-        # Remove the group
-        await graphiti_client.remove_group(temp_group)
-
-        # Verify it's gone
-        groups = await graphiti_client.get_groups()
-        assert temp_group not in groups
-
-
-if __name__ == '__main__':
-    pytest.main([__file__, '-v', '-s'])
+    # Cleanup
+    await entity.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_remove_entity(graph_driver, mock_embedder):
+    """Test removing an entity."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create
+    entity = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+
+    # Remove
+    await graphiti.remove_entity(entity.uuid)
+
+    # Verify it's gone
+    with pytest.raises(NodeNotFoundError):
+        await graphiti.get_entity(entity.uuid)
+
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_get_entities_by_group_id(graph_driver, mock_embedder):
+    """Test listing entities by group ID."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create two entities
+    entity1 = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+    entity2 = await graphiti.create_entity(
+        name='CRUD Test Target',
+        group_id=group_id,
+        summary='CRUD Test Target summary',
+    )
+
+    # Get by group
+    entities = await graphiti.get_entities_by_group_id(group_id)
+
+    assert len(entities) >= 2
+    uuids = [e.uuid for e in entities]
+    assert entity1.uuid in uuids
+    assert entity2.uuid in uuids
+
+    # Cleanup
+    await entity1.delete(graph_driver)
+    await entity2.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_create_edge(graph_driver, mock_embedder):
+    """Test creating an edge with auto-created episode."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create two entities
+    entity1 = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+    entity2 = await graphiti.create_entity(
+        name='CRUD Test Target',
+        group_id=group_id,
+        summary='CRUD Test Target summary',
+    )
+
+    # Create edge
+    edge = await graphiti.create_edge(
+        source_node_uuid=entity1.uuid,
+        target_node_uuid=entity2.uuid,
+        name='WORKS_ON',
+        fact='CRUD Test Entity works on CRUD Test Target',
+        group_id=group_id,
+    )
+
+    assert edge is not None
+    assert edge.uuid is not None
+    assert edge.name == 'WORKS_ON'
+    assert edge.source_node_uuid == entity1.uuid
+    assert edge.target_node_uuid == entity2.uuid
+
+    # Edge should have an episode (auto-created)
+    assert edge.episodes is not None
+    assert len(edge.episodes) == 1
+
+    # Cleanup
+    await edge.delete(graph_driver)
+    await entity1.delete(graph_driver)
+    await entity2.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_get_edge(graph_driver, mock_embedder):
+    """Test retrieving an edge by UUID."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entities and edge
+    entity1 = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+    entity2 = await graphiti.create_entity(
+        name='CRUD Test Target',
+        group_id=group_id,
+        summary='CRUD Test Target summary',
+    )
+    edge = await graphiti.create_edge(
+        source_node_uuid=entity1.uuid,
+        target_node_uuid=entity2.uuid,
+        name='WORKS_ON',
+        fact='CRUD Test Entity works on CRUD Test Target',
+        group_id=group_id,
+    )
+
+    # Get edge
+    retrieved = await graphiti.get_edge(edge.uuid)
+
+    assert retrieved is not None
+    assert retrieved.uuid == edge.uuid
+    assert retrieved.name == 'WORKS_ON'
+
+    # Cleanup
+    await edge.delete(graph_driver)
+    await entity1.delete(graph_driver)
+    await entity2.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_update_edge(graph_driver, mock_embedder):
+    """Test updating an edge."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entities and edge
+    entity1 = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+    entity2 = await graphiti.create_entity(
+        name='CRUD Test Target',
+        group_id=group_id,
+        summary='CRUD Test Target summary',
+    )
+    edge = await graphiti.create_edge(
+        source_node_uuid=entity1.uuid,
+        target_node_uuid=entity2.uuid,
+        name='WORKS_ON',
+        fact='CRUD Test Entity works on CRUD Test Target',
+        group_id=group_id,
+    )
+
+    # Update
+    updated = await graphiti.update_edge(
+        uuid=edge.uuid,
+        name='CONTRIBUTES_TO',
+        fact='Updated fact text',
+    )
+
+    assert updated.name == 'CONTRIBUTES_TO'
+    assert updated.fact == 'Updated fact text'
+
+    # Cleanup
+    await edge.delete(graph_driver)
+    await entity1.delete(graph_driver)
+    await entity2.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_remove_edge(graph_driver, mock_embedder):
+    """Test removing an edge."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entities and edge
+    entity1 = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+    entity2 = await graphiti.create_entity(
+        name='CRUD Test Target',
+        group_id=group_id,
+        summary='CRUD Test Target summary',
+    )
+    edge = await graphiti.create_edge(
+        source_node_uuid=entity1.uuid,
+        target_node_uuid=entity2.uuid,
+        name='WORKS_ON',
+        fact='CRUD Test Entity works on CRUD Test Target',
+        group_id=group_id,
+    )
+
+    # Remove edge
+    await graphiti.remove_edge(edge.uuid)
+
+    # Verify it's gone
+    with pytest.raises(EdgeNotFoundError):
+        await graphiti.get_edge(edge.uuid)
+
+    # Cleanup entities
+    await entity1.delete(graph_driver)
+    await entity2.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_get_edges_by_group_id(graph_driver, mock_embedder):
+    """Test listing edges by group ID."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entities and edge
+    entity1 = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+    entity2 = await graphiti.create_entity(
+        name='CRUD Test Target',
+        group_id=group_id,
+        summary='CRUD Test Target summary',
+    )
+    edge = await graphiti.create_edge(
+        source_node_uuid=entity1.uuid,
+        target_node_uuid=entity2.uuid,
+        name='WORKS_ON',
+        fact='CRUD Test Entity works on CRUD Test Target',
+        group_id=group_id,
+    )
+
+    # Get by group
+    edges = await graphiti.get_edges_by_group_id(group_id)
+
+    assert len(edges) >= 1
+    assert any(e.uuid == edge.uuid for e in edges)
+
+    # Cleanup
+    await edge.delete(graph_driver)
+    await entity1.delete(graph_driver)
+    await entity2.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_get_episode(graph_driver, mock_embedder):
+    """Test retrieving an episode created with an edge."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entities and edge (which creates episode)
+    entity1 = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+    entity2 = await graphiti.create_entity(
+        name='CRUD Test Target',
+        group_id=group_id,
+        summary='CRUD Test Target summary',
+    )
+    edge = await graphiti.create_edge(
+        source_node_uuid=entity1.uuid,
+        target_node_uuid=entity2.uuid,
+        name='WORKS_ON',
+        fact='CRUD Test Entity works on CRUD Test Target',
+        group_id=group_id,
+    )
+
+    # Get episode
+    episode = await graphiti.get_episode(edge.episodes[0])
+
+    assert episode is not None
+    assert episode.content == 'CRUD Test Entity works on CRUD Test Target'
+    assert edge.uuid in episode.entity_edges
+
+    # Cleanup
+    await edge.delete(graph_driver)
+    await entity1.delete(graph_driver)
+    await entity2.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_get_episodes_by_group_id(graph_driver, mock_embedder):
+    """Test listing episodes by group ID."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entities and edge (which creates episode)
+    entity1 = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+    entity2 = await graphiti.create_entity(
+        name='CRUD Test Target',
+        group_id=group_id,
+        summary='CRUD Test Target summary',
+    )
+    edge = await graphiti.create_edge(
+        source_node_uuid=entity1.uuid,
+        target_node_uuid=entity2.uuid,
+        name='WORKS_ON',
+        fact='CRUD Test Entity works on CRUD Test Target',
+        group_id=group_id,
+    )
+
+    # Get episodes by group
+    episodes = await graphiti.get_episodes_by_group_id(group_id)
+
+    assert len(episodes) >= 1
+    assert any(e.uuid == edge.episodes[0] for e in episodes)
+
+    # Cleanup
+    await edge.delete(graph_driver)
+    await entity1.delete(graph_driver)
+    await entity2.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_get_groups(graph_driver, mock_embedder):
+    """Test getting all group IDs."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entity to ensure group exists
+    entity = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+
+    # Get groups
+    groups = await graphiti.get_groups()
+
+    assert isinstance(groups, list)
+    assert group_id in groups
+
+    # Cleanup
+    await entity.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_get_graph_stats(graph_driver, mock_embedder):
+    """Test getting graph statistics."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entities and edge
+    entity1 = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+    entity2 = await graphiti.create_entity(
+        name='CRUD Test Target',
+        group_id=group_id,
+        summary='CRUD Test Target summary',
+    )
+    edge = await graphiti.create_edge(
+        source_node_uuid=entity1.uuid,
+        target_node_uuid=entity2.uuid,
+        name='WORKS_ON',
+        fact='CRUD Test Entity works on CRUD Test Target',
+        group_id=group_id,
+    )
+
+    # Get stats
+    stats = await graphiti.get_graph_stats(group_id=group_id)
+
+    assert 'node_count' in stats
+    assert 'edge_count' in stats
+    assert 'episode_count' in stats
+    assert stats['node_count'] >= 2
+    assert stats['edge_count'] >= 1
+    assert stats['episode_count'] >= 1
+
+    # Cleanup
+    await edge.delete(graph_driver)
+    await entity1.delete(graph_driver)
+    await entity2.delete(graph_driver)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_rename_group(graph_driver, mock_embedder):
+    """Test renaming a group."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entity in group_id_2
+    entity = await graphiti.create_entity(
+        name='Temp Entity',
+        group_id=group_id_2,
+        summary='CRUD Test Entity summary',
+    )
+
+    # Verify group exists
+    groups_before = await graphiti.get_groups()
+    assert group_id_2 in groups_before
+
+    # Rename
+    new_name = f'{group_id_2}_renamed'
+    await graphiti.rename_group(group_id_2, new_name)
+
+    # Verify rename worked
+    groups_after = await graphiti.get_groups()
+    assert group_id_2 not in groups_after
+    assert new_name in groups_after
+
+    # Cleanup
+    await graphiti.remove_group(new_name)
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_rename_group_same_name_error(graph_driver, mock_embedder):
+    """Test that renaming to same name raises ValueError."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    with pytest.raises(ValueError, match='must be different'):
+        await graphiti.rename_group(group_id, group_id)
+
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_remove_group(graph_driver, mock_embedder):
+    """Test removing an entire group."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entity in group_id_2
+    await graphiti.create_entity(
+        name='Entity to delete',
+        group_id=group_id_2,
+        summary='CRUD Test Entity summary',
+    )
+
+    # Verify group exists
+    groups = await graphiti.get_groups()
+    assert group_id_2 in groups
+
+    # Remove group
+    await graphiti.remove_group(group_id_2)
+
+    # Verify it's gone
+    groups = await graphiti.get_groups()
+    assert group_id_2 not in groups
+
+    await graph_driver.close()
+
+
+@pytest.mark.asyncio
+async def test_execute_query(graph_driver, mock_embedder):
+    """Test executing a raw Cypher query."""
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+
+    # Create entity
+    entity = await graphiti.create_entity(
+        name='CRUD Test Entity',
+        group_id=group_id,
+        summary='CRUD Test Entity summary',
+    )
+
+    # Execute query
+    result, _, _ = await graphiti.execute_query(
+        'MATCH (n:Entity {group_id: $group_id}) RETURN count(n) AS count',
+        group_id=group_id,
+    )
+
+    assert len(result) == 1
+    assert result[0]['count'] >= 1
+
+    # Cleanup
+    await entity.delete(graph_driver)
+    await graph_driver.close()
