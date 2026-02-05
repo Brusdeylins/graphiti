@@ -1,32 +1,50 @@
 """
+Copyright 2024, Zep Software, Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
 Integration tests for Graphiti CRUD operations.
 
 Tests the new CRUD methods on the Graphiti class:
 - Entity: create, get, update, remove
 - Edge: create, get, update, remove
-- Episode: get (use upstream's remove_episode)
-- Group: get_groups, get_entities_by_group_id, remove_group, etc.
+- Episode: get, get_episodes_by_group_id
+- Group: get_groups, rename_group, remove_group, get_graph_stats
 
 Run with: pytest tests/test_crud_operations.py -v
 """
 
 import os
+
 import pytest
 import pytest_asyncio
 
 from graphiti_core import Graphiti
 from graphiti_core.driver.falkordb_driver import FalkorDriver
 from graphiti_core.embedder import OpenAIEmbedder, OpenAIEmbedderConfig
-from graphiti_core.errors import NodeNotFoundError, EdgeNotFoundError
+from graphiti_core.errors import EdgeNotFoundError, NodeNotFoundError
 
+pytestmark = pytest.mark.integration
+pytest_plugins = ('pytest_asyncio',)
 
 # Test configuration - uses running FalkorDB container
 FALKORDB_HOST = os.environ.get('FALKORDB_HOST', 'localhost')
 FALKORDB_PORT = int(os.environ.get('FALKORDB_PORT', '6379'))
-FALKORDB_PASSWORD = os.environ.get('FALKORDB_PASSWORD', 'password4FalkorDB!')
-OPENAI_API_URL = os.environ.get('OPENAI_API_URL', 'https://openai.brusdeylins.info/v1')
+FALKORDB_PASSWORD = os.environ.get('FALKORDB_PASSWORD', '')
+OPENAI_API_URL = os.environ.get('OPENAI_API_URL', 'http://localhost:11434/v1')
 EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'nomic-embed-text:latest')
 TEST_GROUP_ID = 'crud_test'
+RENAME_GROUP_ID = 'crud_test_renamed'
 
 # Store UUIDs between tests
 _test_data = {}
@@ -38,7 +56,7 @@ async def graphiti_client():
     driver = FalkorDriver(
         host=FALKORDB_HOST,
         port=FALKORDB_PORT,
-        password=FALKORDB_PASSWORD,
+        password=FALKORDB_PASSWORD or None,
         database=TEST_GROUP_ID,
     )
 
@@ -58,11 +76,12 @@ async def graphiti_client():
 
     yield client
 
-    # Cleanup: remove test group
-    try:
-        await client.remove_group(TEST_GROUP_ID)
-    except Exception:
-        pass
+    # Cleanup: remove test groups
+    for group_id in [TEST_GROUP_ID, RENAME_GROUP_ID]:
+        try:
+            await client.remove_group(group_id)
+        except Exception:
+            pass
 
     await client.close()
 
@@ -93,6 +112,22 @@ class TestEntityCRUD:
 
         # Store UUID for later tests
         _test_data['entity_uuid'] = entity.uuid
+
+    async def test_create_entity_invalid_type(self, graphiti_client: Graphiti):
+        """Test that invalid entity_type raises ValueError."""
+        with pytest.raises(ValueError, match='Invalid entity_type'):
+            await graphiti_client.create_entity(
+                name='Invalid Entity',
+                group_id=TEST_GROUP_ID,
+                entity_type='Invalid:Type',  # Contains colon - invalid
+            )
+
+        with pytest.raises(ValueError, match='Invalid entity_type'):
+            await graphiti_client.create_entity(
+                name='Invalid Entity',
+                group_id=TEST_GROUP_ID,
+                entity_type='123StartWithNumber',  # Starts with number - invalid
+            )
 
     async def test_get_entity(self, graphiti_client: Graphiti):
         """Test retrieving an entity."""
@@ -157,6 +192,14 @@ class TestEntityCRUD:
             uuid=_test_data['entity_uuid'],
             entity_type='Person',
         )
+
+    async def test_update_entity_invalid_type(self, graphiti_client: Graphiti):
+        """Test that invalid entity_type in update raises ValueError."""
+        with pytest.raises(ValueError, match='Invalid entity_type'):
+            await graphiti_client.update_entity(
+                uuid=_test_data['entity_uuid'],
+                entity_type='Invalid-Type',  # Contains hyphen - invalid
+            )
 
     async def test_get_entities_by_group_id(self, graphiti_client: Graphiti):
         """Test listing entities by group ID."""
@@ -250,6 +293,24 @@ class TestEdgeCRUD:
 
 
 @pytest.mark.asyncio(loop_scope='module')
+class TestEpisodeOperations:
+    """Tests for episode operations."""
+
+    async def test_get_episodes_by_group_id(self, graphiti_client: Graphiti):
+        """Test listing episodes by group ID."""
+        episodes = await graphiti_client.get_episodes_by_group_id(TEST_GROUP_ID)
+
+        assert len(episodes) >= 1
+        assert any(e.uuid == _test_data['episode_uuid'] for e in episodes)
+
+    async def test_get_episodes_by_group_id_empty(self, graphiti_client: Graphiti):
+        """Test listing episodes for non-existent group returns empty list."""
+        episodes = await graphiti_client.get_episodes_by_group_id('nonexistent_group')
+
+        assert episodes == []
+
+
+@pytest.mark.asyncio(loop_scope='module')
 class TestGroupOperations:
     """Tests for group-level operations."""
 
@@ -258,7 +319,7 @@ class TestGroupOperations:
         groups = await graphiti_client.get_groups()
 
         assert isinstance(groups, list)
-        # Test group should be in list (if data exists)
+        assert TEST_GROUP_ID in groups
 
     async def test_get_graph_stats(self, graphiti_client: Graphiti):
         """Test getting graph statistics."""
@@ -284,6 +345,36 @@ class TestGroupOperations:
         assert len(result) == 1
         assert result[0]['count'] >= 2
 
+    async def test_rename_group(self, graphiti_client: Graphiti):
+        """Test renaming a group."""
+        # Create a temporary group with some data
+        temp_entity = await graphiti_client.create_entity(
+            name='Temp Entity',
+            group_id=RENAME_GROUP_ID,
+            entity_type='TempType',
+        )
+
+        # Verify it exists
+        groups_before = await graphiti_client.get_groups()
+        assert RENAME_GROUP_ID in groups_before
+
+        # Rename the group
+        new_name = f'{RENAME_GROUP_ID}_new'
+        await graphiti_client.rename_group(RENAME_GROUP_ID, new_name)
+
+        # Verify rename worked
+        groups_after = await graphiti_client.get_groups()
+        assert RENAME_GROUP_ID not in groups_after
+        assert new_name in groups_after
+
+        # Cleanup
+        await graphiti_client.remove_group(new_name)
+
+    async def test_rename_group_same_name_error(self, graphiti_client: Graphiti):
+        """Test that renaming to same name raises ValueError."""
+        with pytest.raises(ValueError, match='must be different'):
+            await graphiti_client.rename_group(TEST_GROUP_ID, TEST_GROUP_ID)
+
 
 @pytest.mark.asyncio(loop_scope='module')
 class TestCleanup:
@@ -303,6 +394,27 @@ class TestCleanup:
 
         with pytest.raises(NodeNotFoundError):
             await graphiti_client.get_entity(_test_data['entity_uuid'])
+
+    async def test_remove_group(self, graphiti_client: Graphiti):
+        """Test removing an entire group."""
+        # Create a temporary group
+        temp_group = 'temp_group_for_deletion'
+        await graphiti_client.create_entity(
+            name='Entity to delete',
+            group_id=temp_group,
+            entity_type='TempEntity',
+        )
+
+        # Verify it exists
+        groups = await graphiti_client.get_groups()
+        assert temp_group in groups
+
+        # Remove the group
+        await graphiti_client.remove_group(temp_group)
+
+        # Verify it's gone
+        groups = await graphiti_client.get_groups()
+        assert temp_group not in groups
 
 
 if __name__ == '__main__':
