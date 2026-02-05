@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import logging
+import re
 from datetime import datetime
 from time import time
 
@@ -1571,7 +1572,17 @@ class Graphiti:
         -------
         EntityNode
             The created entity node with embeddings.
+
+        Raises
+        ------
+        ValueError
+            If entity_type contains invalid characters.
         """
+        # Validate entity_type: only alphanumeric and underscore allowed
+        if entity_type and entity_type != 'Entity':
+            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', entity_type):
+                raise ValueError(f'Invalid entity_type: must be alphanumeric with underscores, got {entity_type!r}')
+
         labels = [entity_type] if entity_type and entity_type != 'Entity' else []
 
         node = EntityNode(
@@ -1644,6 +1655,8 @@ class Graphiti:
         ------
         NodeNotFoundError
             If no entity with the given UUID exists.
+        ValueError
+            If entity_type contains invalid characters.
         """
         node = await EntityNode.get_by_uuid(self.driver, uuid)
 
@@ -1660,23 +1673,25 @@ class Graphiti:
 
         # Handle label changes with explicit REMOVE/SET in database
         if entity_type is not None:
+            # Validate label name: only alphanumeric and underscore allowed
+            if not re.match(r'^[A-Za-z_][A-Za-z0-9_]*$', entity_type):
+                raise ValueError(f'Invalid entity_type: must be alphanumeric with underscores, got {entity_type!r}')
+
             old_labels = node.labels or []
             new_labels = [entity_type] if entity_type != 'Entity' else []
 
             # Remove old labels (except Entity which is always present)
             for old_label in old_labels:
                 if old_label and old_label != 'Entity':
-                    safe_label = old_label.replace('`', '')
                     await self.driver.execute_query(
-                        f'MATCH (n:Entity {{uuid: $uuid}}) REMOVE n:`{safe_label}`',
+                        f'MATCH (n:Entity {{uuid: $uuid}}) REMOVE n:`{old_label}`',
                         uuid=uuid,
                     )
 
             # Add new label
             if new_labels:
-                safe_label = new_labels[0].replace('`', '')
                 await self.driver.execute_query(
-                    f'MATCH (n:Entity {{uuid: $uuid}}) SET n:`{safe_label}`',
+                    f'MATCH (n:Entity {{uuid: $uuid}}) SET n:`{new_labels[0]}`',
                     uuid=uuid,
                 )
 
@@ -1743,6 +1758,7 @@ class Graphiti:
             Description of the data source (default: 'Manual entry').
         create_episode : bool, optional
             Whether to create an episode for traceability (default: True).
+            Episode is only created if fact is non-empty.
 
         Returns
         -------
@@ -1959,12 +1975,7 @@ class Graphiti:
         Returns
         -------
         list[EntityEdge]
-            List of entity edges.
-
-        Raises
-        ------
-        GroupsEdgesNotFoundError
-            If no edges found for the group.
+            List of entity edges. Returns empty list if no edges found.
         """
         # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
         driver = self.driver
@@ -2068,11 +2079,12 @@ class Graphiti:
         """
         group_filter = 'WHERE n.group_id = $group_id' if group_id else ''
         edge_group_filter = 'WHERE r.group_id = $group_id' if group_id else ''
-        # For episode edge query, we need AND when group_id is set
+
+        # Episode edge filter: always check for non-empty episodes list
+        episode_edge_base = 'r.episodes IS NOT NULL AND size(r.episodes) > 0'
         episode_edge_filter = (
-            'WHERE r.group_id = $group_id AND r.episodes IS NOT NULL AND size(r.episodes) > 0'
-            if group_id else
-            'WHERE r.episodes IS NOT NULL AND size(r.episodes) > 0'
+            f'WHERE r.group_id = $group_id AND {episode_edge_base}' if group_id
+            else f'WHERE {episode_edge_base}'
         )
 
         # Count entity nodes

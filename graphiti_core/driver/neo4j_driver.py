@@ -182,19 +182,8 @@ class Neo4jDriver(GraphDriver):
         Delete all nodes and edges belonging to a group.
 
         In Neo4j, group_id is a property on nodes and relationships.
-        This deletes all data with the specified group_id.
+        DETACH DELETE removes nodes and their attached relationships.
         """
-        # Delete all relationships with this group_id first
-        await self.execute_query(
-            """
-            MATCH ()-[r]->()
-            WHERE r.group_id = $group_id
-            DELETE r
-            """,
-            group_id=group_id,
-        )
-
-        # Delete all nodes with this group_id
         await self.execute_query(
             """
             MATCH (n)

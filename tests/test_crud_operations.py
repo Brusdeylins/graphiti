@@ -2,10 +2,10 @@
 Integration tests for Graphiti CRUD operations.
 
 Tests the new CRUD methods on the Graphiti class:
-- Entity: create, get, update, delete
-- Edge: create, get, update, delete
-- Episode: get, delete
-- Group: get_groups, get_entities_by_group_id, etc.
+- Entity: create, get, update, remove
+- Edge: create, get, update, remove
+- Episode: get (use upstream's remove_episode)
+- Group: get_groups, get_entities_by_group_id, remove_group, etc.
 
 Run with: pytest tests/test_crud_operations.py -v
 """

@@ -394,14 +394,14 @@ class FalkorDriver(GraphDriver):
         """
         # Excluded system/internal graphs (hardcoded, not based on current _database)
         excluded_graphs = {'graphiti', 'default_db'}
-        logger.info(f'list_groups: excluded={excluded_graphs}')
+        logger.debug(f'list_groups: excluded={excluded_graphs}')
 
         redis_conn = self.client.connection
         group_ids = []
 
         # Get all keys
         keys = await redis_conn.keys('*')
-        logger.info(f'list_groups: found {len(keys)} keys: {keys[:5] if keys else []}')
+        logger.debug(f'list_groups: found {len(keys)} keys')
 
         for key in keys:
             # Decode if bytes
@@ -425,7 +425,7 @@ class FalkorDriver(GraphDriver):
                 group_ids.append(key)
                 logger.debug(f'list_groups: found graph {key}')
 
-        logger.info(f'list_groups: returning {len(group_ids)} groups: {group_ids}')
+        logger.debug(f'list_groups: returning {len(group_ids)} groups')
         return sorted(group_ids)
 
     async def delete_group(self, group_id: str) -> None:

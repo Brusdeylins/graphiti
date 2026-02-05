@@ -123,6 +123,7 @@ class GraphDriver(ABC):
         """
         raise NotImplementedError(f'build_fulltext_query not implemented for {self.provider}')
 
+    @abstractmethod
     async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
         """
         Rename a group by copying to new name and deleting the old one.
@@ -136,6 +137,7 @@ class GraphDriver(ABC):
         """
         raise NotImplementedError(f'rename_group not implemented for {self.provider}')
 
+    @abstractmethod
     async def list_groups(self) -> list[str]:
         """
         List all available groups/databases.
@@ -150,6 +152,7 @@ class GraphDriver(ABC):
         """
         raise NotImplementedError(f'list_groups not implemented for {self.provider}')
 
+    @abstractmethod
     async def delete_group(self, group_id: str) -> None:
         """
         Delete an entire group/graph.

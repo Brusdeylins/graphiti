@@ -155,7 +155,7 @@ class KuzuDriver(GraphDriver):
         """
         Rename a group by updating the group_id property on all nodes.
 
-        In Kuzu, this is a property update operation on each node type.
+        In Kuzu, this updates Entity, Episodic, RelatesToNode_, and Community nodes.
         """
         if old_group_id == new_group_id:
             raise ValueError('Old and new group IDs must be different')
@@ -193,6 +193,17 @@ class KuzuDriver(GraphDriver):
             new_group_id=new_group_id,
         )
 
+        # Update Community nodes
+        await self.execute_query(
+            """
+            MATCH (n:Community)
+            WHERE n.group_id = $old_group_id
+            SET n.group_id = $new_group_id
+            """,
+            old_group_id=old_group_id,
+            new_group_id=new_group_id,
+        )
+
         logger.info(f'Renamed group {old_group_id} to {new_group_id}')
 
     async def list_groups(self) -> list[str]:
@@ -215,8 +226,8 @@ class KuzuDriver(GraphDriver):
         """
         Delete all nodes belonging to a group.
 
-        In Kuzu, group_id is a property on nodes. This deletes all data
-        with the specified group_id.
+        In Kuzu, group_id is a property on nodes. Deletes Entity, Episodic,
+        RelatesToNode_, and Community nodes with the specified group_id.
         """
         # Delete Entity nodes
         await self.execute_query(
