@@ -1688,14 +1688,14 @@ class Graphiti:
         await node.save(self.driver)
         return node
 
-    async def delete_entity(self, uuid: str) -> None:
+    async def remove_entity(self, uuid: str) -> None:
         """
-        Delete an entity node by UUID.
+        Remove an entity node by UUID.
 
         Parameters
         ----------
         uuid : str
-            The UUID of the entity to delete.
+            The UUID of the entity to remove.
 
         Raises
         ------
@@ -1868,14 +1868,14 @@ class Graphiti:
         await edge.save(self.driver)
         return edge
 
-    async def delete_edge(self, uuid: str) -> None:
+    async def remove_edge(self, uuid: str) -> None:
         """
-        Delete an entity edge by UUID.
+        Remove an entity edge by UUID.
 
         Parameters
         ----------
         uuid : str
-            The UUID of the edge to delete.
+            The UUID of the edge to remove.
 
         Raises
         ------
@@ -1905,17 +1905,6 @@ class Graphiti:
             If no episode with the given UUID exists.
         """
         return await EpisodicNode.get_by_uuid(self.driver, uuid)
-
-    async def delete_episode(self, uuid: str) -> None:
-        """
-        Delete an episode by UUID. Alias for remove_episode.
-
-        Parameters
-        ----------
-        uuid : str
-            The UUID of the episode to delete.
-        """
-        await self.remove_episode(uuid)
 
     async def get_entities_by_group_id(
         self,
@@ -2032,9 +2021,9 @@ class Graphiti:
         """
         return await self.driver.list_groups()
 
-    async def delete_group(self, group_id: str) -> None:
+    async def remove_group(self, group_id: str) -> None:
         """
-        Delete all nodes and edges belonging to a group.
+        Remove all nodes and edges belonging to a group.
 
         WARNING: This is a destructive operation that cannot be undone.
 
@@ -2044,24 +2033,9 @@ class Graphiti:
         Parameters
         ----------
         group_id : str
-            The group ID to delete.
+            The group ID to remove.
         """
         await self.driver.delete_group(group_id)
-
-    async def copy_group(self, source_group_id: str, target_group_id: str) -> None:
-        """
-        Copy all nodes and edges from one group to another.
-
-        Creates a complete copy of the graph with new UUIDs for all entities.
-
-        Parameters
-        ----------
-        source_group_id : str
-            The source group ID to copy from.
-        target_group_id : str
-            The target group ID to copy to (must not exist or will be overwritten).
-        """
-        await self.driver.copy_group(source_group_id, target_group_id)
 
     async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
         """

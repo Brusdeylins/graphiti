@@ -125,69 +125,6 @@ class Neo4jDriver(GraphDriver):
             print(f'Neo4j health check failed: {e}')
             raise
 
-    async def copy_group(self, source_group_id: str, target_group_id: str) -> None:
-        """
-        Copy all nodes and edges from one group to another using Cypher.
-
-        In Neo4j, group_id is a property on nodes and relationships.
-        This creates new nodes/edges with new UUIDs and the target group_id.
-        """
-        import uuid
-
-        if source_group_id == target_group_id:
-            raise ValueError('Source and target group IDs must be different')
-
-        # Copy all nodes - create new nodes with new UUIDs
-        # Uses APOC's map functions if available, otherwise manual property copy
-        await self.execute_query(
-            """
-            MATCH (n)
-            WHERE n.group_id = $source_group_id
-            WITH n, labels(n) AS lbls, properties(n) AS props
-            CALL {
-                WITH n, lbls, props
-                CREATE (copy)
-                SET copy = props,
-                    copy.uuid = randomUUID(),
-                    copy.group_id = $target_group_id
-                WITH copy, lbls
-                CALL apoc.create.addLabels(copy, lbls) YIELD node
-                RETURN node
-            }
-            RETURN count(*) AS nodes_copied
-            """,
-            source_group_id=source_group_id,
-            target_group_id=target_group_id,
-        )
-
-        # Copy all relationships - match by old UUIDs, create between new nodes
-        await self.execute_query(
-            """
-            MATCH (a)-[r]->(b)
-            WHERE r.group_id = $source_group_id
-            WITH a.uuid AS a_uuid, b.uuid AS b_uuid, type(r) AS rel_type, properties(r) AS props
-            MATCH (new_a), (new_b)
-            WHERE new_a.group_id = $target_group_id
-              AND new_b.group_id = $target_group_id
-              AND EXISTS {
-                  MATCH (old_a {uuid: a_uuid, group_id: $source_group_id})
-                  WHERE old_a.name = new_a.name
-              }
-              AND EXISTS {
-                  MATCH (old_b {uuid: b_uuid, group_id: $source_group_id})
-                  WHERE old_b.name = new_b.name
-              }
-            CALL apoc.create.relationship(new_a, rel_type, props, new_b) YIELD rel
-            SET rel.uuid = randomUUID(),
-                rel.group_id = $target_group_id
-            RETURN count(*) AS edges_copied
-            """,
-            source_group_id=source_group_id,
-            target_group_id=target_group_id,
-        )
-
-        logger.info(f'Copied group {source_group_id} to {target_group_id}')
-
     async def rename_group(self, old_group_id: str, new_group_id: str) -> None:
         """
         Rename a group by updating the group_id property on all nodes and edges.

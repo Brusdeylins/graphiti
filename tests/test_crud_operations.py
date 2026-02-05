@@ -58,9 +58,9 @@ async def graphiti_client():
 
     yield client
 
-    # Cleanup: delete test group
+    # Cleanup: remove test group
     try:
-        await client.delete_group(TEST_GROUP_ID)
+        await client.remove_group(TEST_GROUP_ID)
     except Exception:
         pass
 
@@ -289,17 +289,17 @@ class TestGroupOperations:
 class TestCleanup:
     """Cleanup tests - run last."""
 
-    async def test_delete_edge(self, graphiti_client: Graphiti):
-        """Test deleting an edge."""
-        await graphiti_client.delete_edge(_test_data['edge_uuid'])
+    async def test_remove_edge(self, graphiti_client: Graphiti):
+        """Test removing an edge."""
+        await graphiti_client.remove_edge(_test_data['edge_uuid'])
 
         with pytest.raises(EdgeNotFoundError):
             await graphiti_client.get_edge(_test_data['edge_uuid'])
 
-    async def test_delete_entities(self, graphiti_client: Graphiti):
-        """Test deleting entities."""
-        await graphiti_client.delete_entity(_test_data['entity_uuid'])
-        await graphiti_client.delete_entity(_test_data['target_entity_uuid'])
+    async def test_remove_entities(self, graphiti_client: Graphiti):
+        """Test removing entities."""
+        await graphiti_client.remove_entity(_test_data['entity_uuid'])
+        await graphiti_client.remove_entity(_test_data['target_entity_uuid'])
 
         with pytest.raises(NodeNotFoundError):
             await graphiti_client.get_entity(_test_data['entity_uuid'])
