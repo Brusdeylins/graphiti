@@ -1598,10 +1598,15 @@ class Graphiti:
         if summary:
             await node.generate_summary_embedding(self.embedder)
 
-        await node.save(self.driver)
+        # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB:
+            driver = driver.clone(database=group_id)
+
+        await node.save(driver)
         return node
 
-    async def get_entity(self, uuid: str) -> EntityNode:
+    async def get_entity(self, uuid: str, group_id: str | None = None) -> EntityNode:
         """
         Retrieve an entity node by UUID.
 
@@ -1609,6 +1614,8 @@ class Graphiti:
         ----------
         uuid : str
             The UUID of the entity to retrieve.
+        group_id : str | None, optional
+            The group ID for FalkorDB graph selection. Required for FalkorDB.
 
         Returns
         -------
@@ -1620,7 +1627,10 @@ class Graphiti:
         NodeNotFoundError
             If no entity with the given UUID exists.
         """
-        return await EntityNode.get_by_uuid(self.driver, uuid)
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB and group_id:
+            driver = driver.clone(database=group_id)
+        return await EntityNode.get_by_uuid(driver, uuid)
 
     async def update_entity(
         self,
@@ -1629,6 +1639,7 @@ class Graphiti:
         summary: str | None = None,
         entity_type: str | None = None,
         attributes: dict | None = None,
+        group_id: str | None = None,
     ) -> EntityNode:
         """
         Update an existing entity node. Regenerates embeddings when name or summary changes.
@@ -1645,6 +1656,8 @@ class Graphiti:
             New entity type/label.
         attributes : dict | None, optional
             Attributes to merge into existing attributes.
+        group_id : str | None, optional
+            The group ID for FalkorDB graph selection. Required for FalkorDB.
 
         Returns
         -------
@@ -1658,7 +1671,11 @@ class Graphiti:
         ValueError
             If entity_type contains invalid characters.
         """
-        node = await EntityNode.get_by_uuid(self.driver, uuid)
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB and group_id:
+            driver = driver.clone(database=group_id)
+
+        node = await EntityNode.get_by_uuid(driver, uuid)
 
         if name is not None and name != node.name:
             node.name = name
@@ -1683,14 +1700,14 @@ class Graphiti:
             # Remove old labels (except Entity which is always present)
             for old_label in old_labels:
                 if old_label and old_label != 'Entity':
-                    await self.driver.execute_query(
+                    await driver.execute_query(
                         f'MATCH (n:Entity {{uuid: $uuid}}) REMOVE n:`{old_label}`',
                         uuid=uuid,
                     )
 
             # Add new label
             if new_labels:
-                await self.driver.execute_query(
+                await driver.execute_query(
                     f'MATCH (n:Entity {{uuid: $uuid}}) SET n:`{new_labels[0]}`',
                     uuid=uuid,
                 )
@@ -1700,10 +1717,10 @@ class Graphiti:
         if attributes is not None:
             node.attributes.update(attributes)
 
-        await node.save(self.driver)
+        await node.save(driver)
         return node
 
-    async def remove_entity(self, uuid: str) -> None:
+    async def remove_entity(self, uuid: str, group_id: str | None = None) -> None:
         """
         Remove an entity node by UUID.
 
@@ -1711,14 +1728,19 @@ class Graphiti:
         ----------
         uuid : str
             The UUID of the entity to remove.
+        group_id : str | None, optional
+            The group ID for FalkorDB graph selection. Required for FalkorDB.
 
         Raises
         ------
         NodeNotFoundError
             If no entity with the given UUID exists.
         """
-        node = await EntityNode.get_by_uuid(self.driver, uuid)
-        await node.delete(self.driver)
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB and group_id:
+            driver = driver.clone(database=group_id)
+        node = await EntityNode.get_by_uuid(driver, uuid)
+        await node.delete(driver)
 
     async def create_edge(
         self,
@@ -1768,6 +1790,11 @@ class Graphiti:
         now = utc_now()
         episode_uuid = None
 
+        # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB:
+            driver = driver.clone(database=group_id)
+
         # Create episode for traceability if requested
         if create_episode and fact:
             episode = EpisodicNode(
@@ -1779,7 +1806,7 @@ class Graphiti:
                 created_at=now,
                 valid_at=valid_at or now,
             )
-            await episode.save(self.driver)
+            await episode.save(driver)
             episode_uuid = episode.uuid
 
         edge = EntityEdge(
@@ -1796,16 +1823,16 @@ class Graphiti:
         )
 
         await edge.generate_embedding(self.embedder)
-        await edge.save(self.driver)
+        await edge.save(driver)
 
         # Update episode with edge reference (bidirectional link)
         if episode_uuid:
             episode.entity_edges = [edge.uuid]
-            await episode.save(self.driver)
+            await episode.save(driver)
 
         return edge
 
-    async def get_edge(self, uuid: str) -> EntityEdge:
+    async def get_edge(self, uuid: str, group_id: str | None = None) -> EntityEdge:
         """
         Retrieve an entity edge by UUID.
 
@@ -1813,6 +1840,8 @@ class Graphiti:
         ----------
         uuid : str
             The UUID of the edge to retrieve.
+        group_id : str | None, optional
+            The group ID for FalkorDB graph selection. Required for FalkorDB.
 
         Returns
         -------
@@ -1824,7 +1853,10 @@ class Graphiti:
         EdgeNotFoundError
             If no edge with the given UUID exists.
         """
-        return await EntityEdge.get_by_uuid(self.driver, uuid)
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB and group_id:
+            driver = driver.clone(database=group_id)
+        return await EntityEdge.get_by_uuid(driver, uuid)
 
     async def update_edge(
         self,
@@ -1834,6 +1866,7 @@ class Graphiti:
         valid_at: datetime | None = None,
         invalid_at: datetime | None = None,
         attributes: dict | None = None,
+        group_id: str | None = None,
     ) -> EntityEdge:
         """
         Update an existing entity edge. Regenerates embedding when fact changes.
@@ -1852,6 +1885,8 @@ class Graphiti:
             New invalid_at timestamp.
         attributes : dict | None, optional
             Attributes to merge into existing attributes.
+        group_id : str | None, optional
+            The group ID for FalkorDB graph selection. Required for FalkorDB.
 
         Returns
         -------
@@ -1863,7 +1898,11 @@ class Graphiti:
         EdgeNotFoundError
             If no edge with the given UUID exists.
         """
-        edge = await EntityEdge.get_by_uuid(self.driver, uuid)
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB and group_id:
+            driver = driver.clone(database=group_id)
+
+        edge = await EntityEdge.get_by_uuid(driver, uuid)
 
         if name is not None:
             edge.name = name
@@ -1881,10 +1920,10 @@ class Graphiti:
         if attributes is not None:
             edge.attributes.update(attributes)
 
-        await edge.save(self.driver)
+        await edge.save(driver)
         return edge
 
-    async def remove_edge(self, uuid: str) -> None:
+    async def remove_edge(self, uuid: str, group_id: str | None = None) -> None:
         """
         Remove an entity edge by UUID.
 
@@ -1892,16 +1931,21 @@ class Graphiti:
         ----------
         uuid : str
             The UUID of the edge to remove.
+        group_id : str | None, optional
+            The group ID for FalkorDB graph selection. Required for FalkorDB.
 
         Raises
         ------
         EdgeNotFoundError
             If no edge with the given UUID exists.
         """
-        edge = await EntityEdge.get_by_uuid(self.driver, uuid)
-        await edge.delete(self.driver)
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB and group_id:
+            driver = driver.clone(database=group_id)
+        edge = await EntityEdge.get_by_uuid(driver, uuid)
+        await edge.delete(driver)
 
-    async def get_episode(self, uuid: str) -> EpisodicNode:
+    async def get_episode(self, uuid: str, group_id: str | None = None) -> EpisodicNode:
         """
         Retrieve an episode by UUID.
 
@@ -1909,6 +1953,8 @@ class Graphiti:
         ----------
         uuid : str
             The UUID of the episode to retrieve.
+        group_id : str | None, optional
+            The group ID for FalkorDB graph selection. Required for FalkorDB.
 
         Returns
         -------
@@ -1920,7 +1966,10 @@ class Graphiti:
         NodeNotFoundError
             If no episode with the given UUID exists.
         """
-        return await EpisodicNode.get_by_uuid(self.driver, uuid)
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB and group_id:
+            driver = driver.clone(database=group_id)
+        return await EpisodicNode.get_by_uuid(driver, uuid)
 
     async def get_entities_by_group_id(
         self,
@@ -2077,6 +2126,11 @@ class Graphiti:
         dict
             Dictionary with node_count, edge_count, episode_count, episode_edge_count.
         """
+        # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB and group_id:
+            driver = driver.clone(database=group_id)
+
         group_filter = 'WHERE n.group_id = $group_id' if group_id else ''
         edge_group_filter = 'WHERE r.group_id = $group_id' if group_id else ''
 
@@ -2088,7 +2142,7 @@ class Graphiti:
         )
 
         # Count entity nodes
-        node_result, _, _ = await self.driver.execute_query(
+        node_result, _, _ = await driver.execute_query(
             f'MATCH (n:Entity) {group_filter} RETURN count(n) AS count',
             group_id=group_id,
             routing_='r',
@@ -2096,7 +2150,7 @@ class Graphiti:
         node_count = node_result[0]['count'] if node_result else 0
 
         # Count edges
-        edge_result, _, _ = await self.driver.execute_query(
+        edge_result, _, _ = await driver.execute_query(
             f'MATCH ()-[r:RELATES_TO]->() {edge_group_filter} RETURN count(r) AS count',
             group_id=group_id,
             routing_='r',
@@ -2104,7 +2158,7 @@ class Graphiti:
         edge_count = edge_result[0]['count'] if edge_result else 0
 
         # Count episodes
-        episode_result, _, _ = await self.driver.execute_query(
+        episode_result, _, _ = await driver.execute_query(
             f'MATCH (n:Episodic) {group_filter} RETURN count(n) AS count',
             group_id=group_id,
             routing_='r',
@@ -2112,7 +2166,7 @@ class Graphiti:
         episode_count = episode_result[0]['count'] if episode_result else 0
 
         # Count edge-episode references
-        episode_edge_result, _, _ = await self.driver.execute_query(
+        episode_edge_result, _, _ = await driver.execute_query(
             f"""
             MATCH ()-[r:RELATES_TO]->()
             {episode_edge_filter}
@@ -2130,7 +2184,9 @@ class Graphiti:
             'episode_edge_count': episode_edge_count or 0,
         }
 
-    async def execute_query(self, query: str, **params) -> tuple[list[dict], list[str], dict]:
+    async def execute_query(
+        self, query: str, group_id: str | None = None, **params
+    ) -> tuple[list[dict], list[str], dict]:
         """
         Execute a raw Cypher query against the graph.
 
@@ -2141,6 +2197,8 @@ class Graphiti:
         ----------
         query : str
             The Cypher query to execute.
+        group_id : str | None, optional
+            The group ID for FalkorDB graph selection. Required for FalkorDB.
         **params
             Query parameters.
 
@@ -2149,4 +2207,10 @@ class Graphiti:
         tuple[list[dict], list[str], dict]
             Records, column names, and metadata.
         """
-        return await self.driver.execute_query(query, **params)
+        driver = self.driver
+        if driver.provider == GraphProvider.FALKORDB and group_id:
+            driver = driver.clone(database=group_id)
+        # Pass group_id to query params as well if provided (for queries using $group_id)
+        if group_id:
+            params['group_id'] = group_id
+        return await driver.execute_query(query, **params)

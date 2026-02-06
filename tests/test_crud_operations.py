@@ -33,9 +33,9 @@ pytest_plugins = ('pytest_asyncio',)
 
 
 @pytest.mark.asyncio
-async def test_create_entity(graph_driver, mock_embedder):
+async def test_create_entity(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test creating an entity."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     entity = await graphiti.create_entity(
         name='CRUD Test Entity',
@@ -59,9 +59,9 @@ async def test_create_entity(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_create_entity_invalid_type(graph_driver, mock_embedder):
+async def test_create_entity_invalid_type(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test that invalid entity_type raises ValueError."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     with pytest.raises(ValueError, match='Invalid entity_type'):
         await graphiti.create_entity(
@@ -81,9 +81,9 @@ async def test_create_entity_invalid_type(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_get_entity(graph_driver, mock_embedder):
+async def test_get_entity(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test retrieving an entity by UUID."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create
     entity = await graphiti.create_entity(
@@ -93,7 +93,7 @@ async def test_get_entity(graph_driver, mock_embedder):
     )
 
     # Get
-    retrieved = await graphiti.get_entity(entity.uuid)
+    retrieved = await graphiti.get_entity(entity.uuid, group_id=group_id)
 
     assert retrieved is not None
     assert retrieved.uuid == entity.uuid
@@ -105,9 +105,9 @@ async def test_get_entity(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_update_entity_name(graph_driver, mock_embedder):
+async def test_update_entity_name(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test updating entity name."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create
     entity = await graphiti.create_entity(
@@ -120,6 +120,7 @@ async def test_update_entity_name(graph_driver, mock_embedder):
     updated = await graphiti.update_entity(
         uuid=entity.uuid,
         name='Updated Entity Name',
+        group_id=group_id,
     )
 
     assert updated.name == 'Updated Entity Name'
@@ -130,9 +131,9 @@ async def test_update_entity_name(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_update_entity_summary(graph_driver, mock_embedder):
+async def test_update_entity_summary(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test updating entity summary."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create
     entity = await graphiti.create_entity(
@@ -145,6 +146,7 @@ async def test_update_entity_summary(graph_driver, mock_embedder):
     updated = await graphiti.update_entity(
         uuid=entity.uuid,
         summary='Updated summary text',
+        group_id=group_id,
     )
 
     assert updated.summary == 'Updated summary text'
@@ -155,9 +157,9 @@ async def test_update_entity_summary(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_update_entity_type(graph_driver, mock_embedder):
+async def test_update_entity_type(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test updating entity type changes labels."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create with Person type
     entity = await graphiti.create_entity(
@@ -172,13 +174,14 @@ async def test_update_entity_type(graph_driver, mock_embedder):
     updated = await graphiti.update_entity(
         uuid=entity.uuid,
         entity_type='Organization',
+        group_id=group_id,
     )
 
     assert 'Organization' in updated.labels
     assert 'Person' not in updated.labels
 
     # Verify in database
-    retrieved = await graphiti.get_entity(entity.uuid)
+    retrieved = await graphiti.get_entity(entity.uuid, group_id=group_id)
     assert 'Organization' in retrieved.labels
 
     # Cleanup
@@ -187,9 +190,9 @@ async def test_update_entity_type(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_update_entity_invalid_type(graph_driver, mock_embedder):
+async def test_update_entity_invalid_type(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test that invalid entity_type in update raises ValueError."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create
     entity = await graphiti.create_entity(
@@ -203,6 +206,7 @@ async def test_update_entity_invalid_type(graph_driver, mock_embedder):
         await graphiti.update_entity(
             uuid=entity.uuid,
             entity_type='Invalid-Type',
+            group_id=group_id,
         )
 
     # Cleanup
@@ -211,9 +215,9 @@ async def test_update_entity_invalid_type(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_remove_entity(graph_driver, mock_embedder):
+async def test_remove_entity(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test removing an entity."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create
     entity = await graphiti.create_entity(
@@ -223,19 +227,19 @@ async def test_remove_entity(graph_driver, mock_embedder):
     )
 
     # Remove
-    await graphiti.remove_entity(entity.uuid)
+    await graphiti.remove_entity(entity.uuid, group_id=group_id)
 
     # Verify it's gone
     with pytest.raises(NodeNotFoundError):
-        await graphiti.get_entity(entity.uuid)
+        await graphiti.get_entity(entity.uuid, group_id=group_id)
 
     await graph_driver.close()
 
 
 @pytest.mark.asyncio
-async def test_get_entities_by_group_id(graph_driver, mock_embedder):
+async def test_get_entities_by_group_id(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test listing entities by group ID."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create two entities
     entity1 = await graphiti.create_entity(
@@ -264,9 +268,9 @@ async def test_get_entities_by_group_id(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_create_edge(graph_driver, mock_embedder):
+async def test_create_edge(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test creating an edge with auto-created episode."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create two entities
     entity1 = await graphiti.create_entity(
@@ -307,9 +311,9 @@ async def test_create_edge(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_get_edge(graph_driver, mock_embedder):
+async def test_get_edge(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test retrieving an edge by UUID."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entities and edge
     entity1 = await graphiti.create_entity(
@@ -331,7 +335,7 @@ async def test_get_edge(graph_driver, mock_embedder):
     )
 
     # Get edge
-    retrieved = await graphiti.get_edge(edge.uuid)
+    retrieved = await graphiti.get_edge(edge.uuid, group_id=group_id)
 
     assert retrieved is not None
     assert retrieved.uuid == edge.uuid
@@ -345,9 +349,9 @@ async def test_get_edge(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_update_edge(graph_driver, mock_embedder):
+async def test_update_edge(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test updating an edge."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entities and edge
     entity1 = await graphiti.create_entity(
@@ -373,6 +377,7 @@ async def test_update_edge(graph_driver, mock_embedder):
         uuid=edge.uuid,
         name='CONTRIBUTES_TO',
         fact='Updated fact text',
+        group_id=group_id,
     )
 
     assert updated.name == 'CONTRIBUTES_TO'
@@ -386,9 +391,9 @@ async def test_update_edge(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_remove_edge(graph_driver, mock_embedder):
+async def test_remove_edge(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test removing an edge."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entities and edge
     entity1 = await graphiti.create_entity(
@@ -410,11 +415,11 @@ async def test_remove_edge(graph_driver, mock_embedder):
     )
 
     # Remove edge
-    await graphiti.remove_edge(edge.uuid)
+    await graphiti.remove_edge(edge.uuid, group_id=group_id)
 
     # Verify it's gone
     with pytest.raises(EdgeNotFoundError):
-        await graphiti.get_edge(edge.uuid)
+        await graphiti.get_edge(edge.uuid, group_id=group_id)
 
     # Cleanup entities
     await entity1.delete(graph_driver)
@@ -423,9 +428,9 @@ async def test_remove_edge(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_get_edges_by_group_id(graph_driver, mock_embedder):
+async def test_get_edges_by_group_id(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test listing edges by group ID."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entities and edge
     entity1 = await graphiti.create_entity(
@@ -460,9 +465,9 @@ async def test_get_edges_by_group_id(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_get_episode(graph_driver, mock_embedder):
+async def test_get_episode(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test retrieving an episode created with an edge."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entities and edge (which creates episode)
     entity1 = await graphiti.create_entity(
@@ -484,7 +489,7 @@ async def test_get_episode(graph_driver, mock_embedder):
     )
 
     # Get episode
-    episode = await graphiti.get_episode(edge.episodes[0])
+    episode = await graphiti.get_episode(edge.episodes[0], group_id=group_id)
 
     assert episode is not None
     assert episode.content == 'CRUD Test Entity works on CRUD Test Target'
@@ -498,9 +503,9 @@ async def test_get_episode(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_get_episodes_by_group_id(graph_driver, mock_embedder):
+async def test_get_episodes_by_group_id(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test listing episodes by group ID."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entities and edge (which creates episode)
     entity1 = await graphiti.create_entity(
@@ -535,9 +540,9 @@ async def test_get_episodes_by_group_id(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_get_groups(graph_driver, mock_embedder):
+async def test_get_groups(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test getting all group IDs."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entity to ensure group exists
     entity = await graphiti.create_entity(
@@ -558,9 +563,9 @@ async def test_get_groups(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_get_graph_stats(graph_driver, mock_embedder):
+async def test_get_graph_stats(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test getting graph statistics."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entities and edge
     entity1 = await graphiti.create_entity(
@@ -599,9 +604,9 @@ async def test_get_graph_stats(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_rename_group(graph_driver, mock_embedder):
+async def test_rename_group(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test renaming a group."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entity in group_id_2
     entity = await graphiti.create_entity(
@@ -629,9 +634,9 @@ async def test_rename_group(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_rename_group_same_name_error(graph_driver, mock_embedder):
+async def test_rename_group_same_name_error(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test that renaming to same name raises ValueError."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     with pytest.raises(ValueError, match='must be different'):
         await graphiti.rename_group(group_id, group_id)
@@ -640,9 +645,9 @@ async def test_rename_group_same_name_error(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_remove_group(graph_driver, mock_embedder):
+async def test_remove_group(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test removing an entire group."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entity in group_id_2
     await graphiti.create_entity(
@@ -666,9 +671,9 @@ async def test_remove_group(graph_driver, mock_embedder):
 
 
 @pytest.mark.asyncio
-async def test_execute_query(graph_driver, mock_embedder):
+async def test_execute_query(graph_driver, mock_embedder, mock_llm_client, mock_cross_encoder):
     """Test executing a raw Cypher query."""
-    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder)
+    graphiti = Graphiti(graph_driver=graph_driver, embedder=mock_embedder, llm_client=mock_llm_client, cross_encoder=mock_cross_encoder)
 
     # Create entity
     entity = await graphiti.create_entity(
