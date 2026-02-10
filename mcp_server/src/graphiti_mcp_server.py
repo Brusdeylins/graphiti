@@ -207,6 +207,29 @@ class GraphitiService:
             except Exception as e:
                 logger.warning(f'Failed to create embedder client: {e}')
 
+            # Create cross-encoder/reranker client
+            cross_encoder = None
+            try:
+                reranker_cfg = self.config.reranker
+                if reranker_cfg.provider.lower() == 'openai' and reranker_cfg.providers.openai:
+                    from graphiti_core.cross_encoder.openai_reranker_client import (
+                        OpenAIRerankerClient,
+                    )
+                    from graphiti_core.llm_client import LLMConfig as CoreLLMConfig
+
+                    openai_cfg = reranker_cfg.providers.openai
+                    reranker_llm_config = CoreLLMConfig(
+                        api_key=openai_cfg.api_key,
+                        base_url=openai_cfg.api_url,
+                        model=reranker_cfg.model,
+                    )
+                    cross_encoder = OpenAIRerankerClient(config=reranker_llm_config)
+                    logger.info(
+                        f'Created reranker client: {reranker_cfg.provider} / {reranker_cfg.model or "default"}'
+                    )
+            except Exception as e:
+                logger.warning(f'Failed to create reranker client, using default: {e}')
+
             # Get database configuration
             db_config = DatabaseDriverFactory.create_config(self.config.database)
 
@@ -246,6 +269,7 @@ class GraphitiService:
                         graph_driver=falkor_driver,
                         llm_client=llm_client,
                         embedder=embedder_client,
+                        cross_encoder=cross_encoder,
                         max_coroutines=self.semaphore_limit,
                     )
                 else:
@@ -256,6 +280,7 @@ class GraphitiService:
                         password=db_config['password'],
                         llm_client=llm_client,
                         embedder=embedder_client,
+                        cross_encoder=cross_encoder,
                         max_coroutines=self.semaphore_limit,
                     )
             except Exception as db_error:
@@ -875,6 +900,9 @@ async def initialize_server() -> ServerConfig:
     logger.info('Using configuration:')
     logger.info(f'  - LLM: {config.llm.provider} / {config.llm.model}')
     logger.info(f'  - Embedder: {config.embedder.provider} / {config.embedder.model}')
+    logger.info(
+        f'  - Reranker: {config.reranker.provider} / {config.reranker.model or "default"}'
+    )
     logger.info(f'  - Database: {config.database.provider}')
     logger.info(f'  - Group ID: {config.graphiti.group_id}')
     logger.info(f'  - Transport: {config.server.transport}')

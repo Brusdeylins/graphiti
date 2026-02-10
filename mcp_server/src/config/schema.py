@@ -238,6 +238,14 @@ class EntityTypeConfig(BaseModel):
     description: str
 
 
+class RerankerConfig(BaseModel):
+    """Reranker/cross-encoder configuration."""
+
+    provider: str = Field(default='openai', description='Reranker provider (openai)')
+    model: str | None = Field(default=None, description='Model for reranking (defaults to gpt-4.1-nano)')
+    providers: EmbedderProvidersConfig = Field(default_factory=EmbedderProvidersConfig)
+
+
 class GraphitiAppConfig(BaseModel):
     """Graphiti-specific configuration."""
 
@@ -258,6 +266,7 @@ class GraphitiConfig(BaseSettings):
     server: ServerConfig = Field(default_factory=ServerConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     embedder: EmbedderConfig = Field(default_factory=EmbedderConfig)
+    reranker: RerankerConfig = Field(default_factory=RerankerConfig)
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     graphiti: GraphitiAppConfig = Field(default_factory=GraphitiAppConfig)
 
