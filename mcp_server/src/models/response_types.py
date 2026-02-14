@@ -41,3 +41,19 @@ class EpisodeSearchResponse(TypedDict):
 class StatusResponse(TypedDict):
     status: str
     message: str
+
+
+class NodeListResponse(TypedDict):
+    message: str
+    nodes: list[NodeResult]
+    total: int
+    has_more: bool
+    next_cursor: str | None
+
+
+class EdgeListResponse(TypedDict):
+    message: str
+    edges: list[dict[str, Any]]
+    total: int
+    has_more: bool
+    next_cursor: str | None
