@@ -362,6 +362,78 @@ class TestDatetimeConversion:
         assert convert_datetimes_to_strings(True) is True
 
 
+class TestGroupExists:
+    """Tests for FalkorDriver.group_exists() — must never call select_graph()."""
+
+    @unittest.skipIf(not HAS_FALKORDB, 'FalkorDB is not installed')
+    def setup_method(self):
+        """Set up test fixtures with a mocked Redis connection."""
+        self.mock_client = MagicMock()
+        self.mock_redis = AsyncMock()
+        self.mock_client.connection = self.mock_redis
+        with patch('graphiti_core.driver.falkordb_driver.FalkorDB'):
+            self.driver = FalkorDriver()
+        self.driver.client = self.mock_client
+
+    @pytest.mark.asyncio
+    @unittest.skipIf(not HAS_FALKORDB, 'FalkorDB is not installed')
+    async def test_group_exists_true_for_existing_graph(self):
+        """EXISTS=True and TYPE=graphdata should return True."""
+        self.mock_redis.exists.return_value = True
+        self.mock_redis.type.return_value = 'graphdata'
+
+        result = await self.driver.group_exists('my_graph')
+
+        assert result is True
+        self.mock_redis.exists.assert_awaited_once_with('my_graph')
+        self.mock_redis.type.assert_awaited_once_with('my_graph')
+
+    @pytest.mark.asyncio
+    @unittest.skipIf(not HAS_FALKORDB, 'FalkorDB is not installed')
+    async def test_group_exists_false_for_missing_key(self):
+        """EXISTS=False should return False without calling TYPE."""
+        self.mock_redis.exists.return_value = False
+
+        result = await self.driver.group_exists('nonexistent')
+
+        assert result is False
+        self.mock_redis.exists.assert_awaited_once_with('nonexistent')
+        self.mock_redis.type.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    @unittest.skipIf(not HAS_FALKORDB, 'FalkorDB is not installed')
+    async def test_group_exists_false_for_non_graph_key(self):
+        """EXISTS=True but TYPE=string should return False."""
+        self.mock_redis.exists.return_value = True
+        self.mock_redis.type.return_value = 'string'
+
+        result = await self.driver.group_exists('some_string_key')
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    @unittest.skipIf(not HAS_FALKORDB, 'FalkorDB is not installed')
+    async def test_group_exists_handles_bytes_type(self):
+        """TYPE returning bytes should be decoded properly."""
+        self.mock_redis.exists.return_value = True
+        self.mock_redis.type.return_value = b'graphdata'
+
+        result = await self.driver.group_exists('my_graph')
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    @unittest.skipIf(not HAS_FALKORDB, 'FalkorDB is not installed')
+    async def test_group_exists_does_not_call_select_graph(self):
+        """Critical: group_exists must never call select_graph (no auto-creation)."""
+        self.mock_redis.exists.return_value = True
+        self.mock_redis.type.return_value = 'graphdata'
+
+        await self.driver.group_exists('my_graph')
+
+        self.mock_client.select_graph.assert_not_called()
+
+
 # Simple integration test
 class TestFalkorDriverIntegration:
     """Simple integration test for FalkorDB driver."""

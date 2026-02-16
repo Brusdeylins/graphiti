@@ -167,6 +167,11 @@ class GraphDriver(ABC):
         ...
 
     @abstractmethod
+    async def group_exists(self, group_id: str) -> bool:
+        """Check whether a group exists (side-effect-free, no auto-creation)."""
+        ...
+
+    @abstractmethod
     async def delete_group(self, group_id: str) -> None:
         """
         Delete an entire group/graph.

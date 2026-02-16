@@ -450,6 +450,20 @@ class FalkorDriver(GraphDriver):
         logger.debug(f'list_groups: returning {len(group_ids)} groups')
         return sorted(group_ids)
 
+    async def group_exists(self, group_id: str) -> bool:
+        """Check whether a FalkorDB graph exists without calling select_graph().
+
+        Uses Redis EXISTS + TYPE commands (O(1)) to avoid auto-creation side effects.
+        """
+        redis_conn = self.client.connection
+        exists = await redis_conn.exists(group_id)
+        if not exists:
+            return False
+        key_type = await redis_conn.type(group_id)
+        if isinstance(key_type, bytes):
+            key_type = key_type.decode('utf-8')
+        return key_type == 'graphdata'
+
     async def delete_group(self, group_id: str) -> None:
         """
         Delete a FalkorDB graph completely.

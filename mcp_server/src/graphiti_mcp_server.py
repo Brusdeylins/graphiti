@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from graphiti_core import Graphiti
 from graphiti_core.driver.driver import GraphProvider
 from graphiti_core.edges import EntityEdge
+from graphiti_core.errors import GroupNotFoundError
 from graphiti_core.nodes import EntityNode, EpisodeType, EpisodicNode
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
@@ -410,15 +411,20 @@ class GraphitiService:
         return self.client
 
 
-def _get_driver(client: Graphiti, group_id: str | None = None):
+async def _get_driver(client: Graphiti, group_id: str | None = None):
     """Get driver, routing to the correct graph for the given group_id.
 
     DB-neutral: Only clones the driver for FalkorDB (separate graphs per group_id).
     For Neo4j and other providers, returns the original driver unchanged.
     This matches the pattern used throughout graphiti_core/graphiti.py.
+
+    Raises GroupNotFoundError if the group does not exist in FalkorDB
+    (prevents auto-creation of empty graphs via select_graph()).
     """
     driver = client.driver
     if group_id and driver.provider == GraphProvider.FALKORDB:
+        if not await driver.group_exists(group_id):
+            raise GroupNotFoundError(group_id)
         driver = driver.clone(database=group_id)
     return driver
 
@@ -752,7 +758,7 @@ async def delete_entity_edge(
 
     try:
         client = await graphiti_service.get_client()
-        driver = _get_driver(client, group_id)
+        driver = await _get_driver(client, group_id)
 
         # Get the entity edge by UUID
         entity_edge = await EntityEdge.get_by_uuid(driver, uuid)
@@ -782,7 +788,7 @@ async def delete_episode(
 
     try:
         client = await graphiti_service.get_client()
-        driver = _get_driver(client, group_id)
+        driver = await _get_driver(client, group_id)
 
         # Get the episodic node by UUID
         episodic_node = await EpisodicNode.get_by_uuid(driver, uuid)
@@ -812,7 +818,7 @@ async def get_entity_edge(
 
     try:
         client = await graphiti_service.get_client()
-        driver = _get_driver(client, group_id)
+        driver = await _get_driver(client, group_id)
 
         # Get the entity edge directly using the EntityEdge class method
         entity_edge = await EntityEdge.get_by_uuid(driver, uuid)
@@ -1020,7 +1026,7 @@ async def get_entity_node(
 
     try:
         client = await graphiti_service.get_client()
-        driver = _get_driver(client, group_id)
+        driver = await _get_driver(client, group_id)
         entity_node = await EntityNode.get_by_uuid(driver, uuid)
         return format_node_result(entity_node)
     except Exception as e:
@@ -1055,7 +1061,7 @@ async def get_entity_edges_by_node(
 
     try:
         client = await graphiti_service.get_client()
-        driver = _get_driver(client, group_id)
+        driver = await _get_driver(client, group_id)
 
         # Get all edges connected to this node
         edges = await EntityEdge.get_by_node_uuid(driver, node_uuid)
@@ -1341,7 +1347,7 @@ async def delete_entity_node(
 
     try:
         client = await graphiti_service.get_client()
-        driver = _get_driver(client, group_id)
+        driver = await _get_driver(client, group_id)
 
         # First check how many edges are connected
         edges = await EntityEdge.get_by_node_uuid(driver, uuid)

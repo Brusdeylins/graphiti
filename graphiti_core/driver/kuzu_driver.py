@@ -313,6 +313,15 @@ class KuzuDriver(GraphDriver):
         )
         return sorted({record['group_id'] for record in records})
 
+    async def group_exists(self, group_id: str) -> bool:
+        """Check whether a group exists across Kuzu's explicit schema tables."""
+        records, _, _ = await self.execute_query(
+            '''MATCH (n:Entity) WHERE n.group_id = $group_id RETURN true LIMIT 1
+               UNION ALL MATCH (n:Episodic) WHERE n.group_id = $group_id RETURN true LIMIT 1''',
+            group_id=group_id,
+        )
+        return len(records) > 0
+
     async def delete_group(self, group_id: str) -> None:
         """
         Delete all nodes belonging to a group.
