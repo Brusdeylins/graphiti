@@ -38,7 +38,7 @@ from graphiti_core.edges import (
     create_entity_edge_embeddings,
 )
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder
-from graphiti_core.errors import NodeNotFoundError
+from graphiti_core.errors import GroupNotFoundError, NodeNotFoundError
 from graphiti_core.graphiti_types import GraphitiClients
 from graphiti_core.helpers import (
     get_default_group_id,
@@ -1629,6 +1629,8 @@ class Graphiti:
         """
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB and group_id:
+            if not await driver.group_exists(group_id):
+                raise GroupNotFoundError(group_id)
             driver = driver.clone(database=group_id)
         return await EntityNode.get_by_uuid(driver, uuid)
 
@@ -1673,6 +1675,8 @@ class Graphiti:
         """
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB and group_id:
+            if not await driver.group_exists(group_id):
+                raise GroupNotFoundError(group_id)
             driver = driver.clone(database=group_id)
 
         node = await EntityNode.get_by_uuid(driver, uuid)
@@ -1741,6 +1745,8 @@ class Graphiti:
         """
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB and group_id:
+            if not await driver.group_exists(group_id):
+                raise GroupNotFoundError(group_id)
             driver = driver.clone(database=group_id)
         node = await EntityNode.get_by_uuid(driver, uuid)
         await node.delete(driver)
@@ -1858,6 +1864,8 @@ class Graphiti:
         """
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB and group_id:
+            if not await driver.group_exists(group_id):
+                raise GroupNotFoundError(group_id)
             driver = driver.clone(database=group_id)
         return await EntityEdge.get_by_uuid(driver, uuid)
 
@@ -1903,6 +1911,8 @@ class Graphiti:
         """
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB and group_id:
+            if not await driver.group_exists(group_id):
+                raise GroupNotFoundError(group_id)
             driver = driver.clone(database=group_id)
 
         edge = await EntityEdge.get_by_uuid(driver, uuid)
@@ -1944,6 +1954,8 @@ class Graphiti:
         """
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB and group_id:
+            if not await driver.group_exists(group_id):
+                raise GroupNotFoundError(group_id)
             driver = driver.clone(database=group_id)
         edge = await EntityEdge.get_by_uuid(driver, uuid)
         await edge.delete(driver)
@@ -1971,6 +1983,8 @@ class Graphiti:
         """
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB and group_id:
+            if not await driver.group_exists(group_id):
+                raise GroupNotFoundError(group_id)
             driver = driver.clone(database=group_id)
         return await EpisodicNode.get_by_uuid(driver, uuid)
 
@@ -2000,6 +2014,8 @@ class Graphiti:
         # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB:
+            if not await driver.group_exists(group_id):
+                return []
             driver = driver.clone(database=group_id)
 
         return await EntityNode.get_by_group_ids(
@@ -2032,6 +2048,8 @@ class Graphiti:
         # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB:
+            if not await driver.group_exists(group_id):
+                return []
             driver = driver.clone(database=group_id)
 
         return await EntityEdge.get_by_group_ids(
@@ -2064,6 +2082,8 @@ class Graphiti:
         # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB:
+            if not await driver.group_exists(group_id):
+                return []
             driver = driver.clone(database=group_id)
 
         return await EpisodicNode.get_by_group_ids(
@@ -2083,6 +2103,10 @@ class Graphiti:
             List of group/database names.
         """
         return await self.driver.list_groups()
+
+    async def group_exists(self, group_id: str) -> bool:
+        """Check whether a group exists (side-effect-free, no auto-creation)."""
+        return await self.driver.group_exists(group_id)
 
     async def remove_group(self, group_id: str) -> None:
         """
@@ -2132,6 +2156,13 @@ class Graphiti:
         # FalkorDB uses separate graphs per group_id, so clone driver to point to correct graph
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB and group_id:
+            if not await driver.group_exists(group_id):
+                return {
+                    'node_count': 0,
+                    'edge_count': 0,
+                    'episode_count': 0,
+                    'episode_edge_count': 0,
+                }
             driver = driver.clone(database=group_id)
 
         group_filter = 'WHERE n.group_id = $group_id' if group_id else ''
@@ -2233,6 +2264,8 @@ class Graphiti:
         """
         driver = self.driver
         if driver.provider == GraphProvider.FALKORDB and group_id:
+            if not await driver.group_exists(group_id):
+                raise GroupNotFoundError(group_id)
             driver = driver.clone(database=group_id)
         # Pass group_id to query params as well if provided (for queries using $group_id)
         if group_id:

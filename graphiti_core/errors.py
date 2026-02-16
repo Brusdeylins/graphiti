@@ -81,3 +81,11 @@ class GroupIdValidationError(GraphitiError):
     def __init__(self, group_id: str):
         self.message = f'group_id "{group_id}" must contain only alphanumeric characters, dashes, or underscores'
         super().__init__(self.message)
+
+
+class GroupNotFoundError(GraphitiError):
+    """Raised when a group_id does not exist in the database."""
+
+    def __init__(self, group_id: str):
+        self.message = f'group {group_id} not found'
+        super().__init__(self.message)

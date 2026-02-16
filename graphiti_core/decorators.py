@@ -61,6 +61,11 @@ def handle_multiple_group_ids(func: F) -> F:
             # Execute for each group_id concurrently
             driver = self.clients.driver
 
+            # Filter out non-existent group_ids to avoid auto-creating empty graphs
+            existing_gids = [gid for gid in group_ids if await driver.group_exists(gid)]
+            if not existing_gids:
+                return []
+
             async def execute_for_group(gid: str):
                 # Remove group_ids from args if it was passed positionally
                 filtered_args = list(args)
@@ -74,7 +79,7 @@ def handle_multiple_group_ids(func: F) -> F:
                 )
 
             results = await semaphore_gather(
-                *[execute_for_group(gid) for gid in group_ids],
+                *[execute_for_group(gid) for gid in existing_gids],
                 max_coroutines=getattr(self, 'max_coroutines', None),
             )
 

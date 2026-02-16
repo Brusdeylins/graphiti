@@ -360,6 +360,14 @@ class NeptuneDriver(GraphDriver):
         )
         return [record['group_id'] for record in records]
 
+    async def group_exists(self, group_id: str) -> bool:
+        """Check whether a group exists by looking for any node with the given group_id."""
+        records, _, _ = await self.execute_query(
+            'MATCH (n) WHERE n.group_id = $group_id RETURN true LIMIT 1',
+            group_id=group_id,
+        )
+        return len(records) > 0
+
     async def delete_group(self, group_id: str) -> None:
         """
         Delete all nodes and edges belonging to a group.

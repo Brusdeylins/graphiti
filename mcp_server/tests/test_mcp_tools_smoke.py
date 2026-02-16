@@ -37,6 +37,7 @@ def mock_falkor_driver():
     driver.provider = GraphProvider.FALKORDB
     driver.session = MagicMock()
     driver.execute_query = AsyncMock()
+    driver.group_exists = AsyncMock(return_value=True)
     cloned = MagicMock()
     cloned.provider = GraphProvider.FALKORDB
     cloned.session = MagicMock()
@@ -226,41 +227,52 @@ class TestImports:
 
 
 class TestGetDriver:
-    def test_neo4j_returns_original(self, mock_driver):
+    async def test_neo4j_returns_original(self, mock_driver):
         from graphiti_mcp_server import _get_driver
 
         client = MagicMock()
         client.driver = mock_driver
-        result = _get_driver(client, group_id='mygroup')
+        result = await _get_driver(client, group_id='mygroup')
         assert result is mock_driver
         mock_driver.clone.assert_not_called()
 
-    def test_falkordb_clones_with_group_id(self, mock_falkor_driver):
+    async def test_falkordb_clones_with_group_id(self, mock_falkor_driver):
         from graphiti_mcp_server import _get_driver
 
         client = MagicMock()
         client.driver = mock_falkor_driver
-        result = _get_driver(client, group_id='TankWars')
+        result = await _get_driver(client, group_id='TankWars')
         assert result is mock_falkor_driver.clone.return_value
         mock_falkor_driver.clone.assert_called_once_with(database='TankWars')
 
-    def test_falkordb_no_group_id_returns_original(self, mock_falkor_driver):
+    async def test_falkordb_no_group_id_returns_original(self, mock_falkor_driver):
         from graphiti_mcp_server import _get_driver
 
         client = MagicMock()
         client.driver = mock_falkor_driver
-        result = _get_driver(client, group_id=None)
+        result = await _get_driver(client, group_id=None)
         assert result is mock_falkor_driver
         mock_falkor_driver.clone.assert_not_called()
 
-    def test_no_group_id_returns_original(self, mock_driver):
+    async def test_no_group_id_returns_original(self, mock_driver):
         from graphiti_mcp_server import _get_driver
 
         client = MagicMock()
         client.driver = mock_driver
-        result = _get_driver(client)
+        result = await _get_driver(client)
         assert result is mock_driver
         mock_driver.clone.assert_not_called()
+
+    async def test_falkordb_raises_group_not_found(self, mock_falkor_driver):
+        from graphiti_core.errors import GroupNotFoundError
+
+        from graphiti_mcp_server import _get_driver
+
+        mock_falkor_driver.group_exists = AsyncMock(return_value=False)
+        client = MagicMock()
+        client.driver = mock_falkor_driver
+        with pytest.raises(GroupNotFoundError):
+            await _get_driver(client, group_id='nonexistent')
 
 
 # ---------------------------------------------------------------------------
