@@ -17,7 +17,7 @@ limitations under the License.
 import functools
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
+from typing import Any, TypeVar, get_type_hints
 
 from graphiti_core.driver.driver import GraphProvider
 from graphiti_core.helpers import semaphore_gather
@@ -64,6 +64,14 @@ def handle_multiple_group_ids(func: F) -> F:
             # Filter out non-existent group_ids to avoid auto-creating empty graphs
             existing_gids = [gid for gid in group_ids if await driver.group_exists(gid)]
             if not existing_gids:
+                # Return the correct empty type based on the function's return annotation
+                try:
+                    hints = get_type_hints(func)
+                    ret = hints.get('return')
+                except Exception:
+                    ret = None
+                if ret is SearchResults:
+                    return SearchResults(edges=[], nodes=[])
                 return []
 
             async def execute_for_group(gid: str):
